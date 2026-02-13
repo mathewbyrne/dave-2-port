@@ -1,0 +1,19 @@
+# Dave 2 port project
+
+This is a project aimed at porting across the classic DOS game Dangerous Dave
+2 in the Haunted Mansion to a portable C codebase.
+
+This is mostly an experiment in decompilation, but I'm hopeful to complete this
+and have a finished port.
+
+## Directories
+
+dos - original dos source and assets
+bin - supporting binary executables
+reverse - decompiled sources
+    /dave-unpacked uncompressed executable sourced from dos/DAVE
+src - source code of the port
+
+## References
+
+- Data assets decompiled https://github.com/gmegidish/dangerous-dave-re
