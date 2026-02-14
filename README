@@ -6,7 +6,16 @@ This is a project aimed at porting across the classic DOS game Dangerous Dave
 This is mostly an experiment in decompilation, but I'm hopeful to complete this
 and have a finished port.
 
+Goals of this project include:
+
+- Aiming for a reimplementation of DD2, not necessarily 1:1 but the game logic
+  should be complete and 95% accurate.
+- Should be able to compile and run on modern hardware.
+- Is not aiming to be compilable on DOS at this stage.
+
 ## Directories
+
+Note: proprietary data will not be committed to this repostiory.
 
 dos - original dos source and assets
 bin - supporting binary executables
