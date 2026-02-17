@@ -27,13 +27,17 @@ int decode_ega_bitplanes(uint8_t *dst, const uint8_t *src, uint16_t width, uint1
     return 0;
 }
 
+typedef struct {
+    unsigned char *data;
+    size_t len;
+} file_t;
 
 /**
  * load_file takes a filename, and a destination pointer.  It will allocate
  * enough memory to store the file contents then load the contents and save the
  * address in *data.
  */
-int load_file(char *filename, uint8_t **data_ptr, size_t *size_ptr) {
+int load_file(const char *filename, file_t *out) {
     FILE *fp;
     if (fopen_s(&fp, filename, "rb") != 0) {
         printf("could not read file %s", filename);
@@ -46,8 +50,8 @@ int load_file(char *filename, uint8_t **data_ptr, size_t *size_ptr) {
         return 1;
     }
     
-    long size = ftell(fp);
-    if (size < 0) {
+    out->len = ftell(fp);
+    if (out->len < 0) {
         fclose(fp);
         printf("could not read file size");
         return 1;
@@ -55,47 +59,44 @@ int load_file(char *filename, uint8_t **data_ptr, size_t *size_ptr) {
 
     rewind(fp);
 
-    uint8_t *data = (uint8_t *)malloc((size_t) size);
-    if (!data) {
-        printf("could not allocate %ld bytes", size);
+    out->data = (unsigned char *)malloc(out->len);
+    if (!out->data) {
+        printf("could not allocate %zd bytes", out->len);
         return 1;
     }
 
-    size_t read = fread(data, 1, (size_t) size, fp);
+    size_t read = fread(out->data, 1, out->len, fp);
     fclose(fp);
 
-    if (read != (size_t) size) {
-        free(data);
+    if (read != out->len) {
+        free(out->data);
         printf("read bytes differs from ftell");
         return 1;
     }
 
-    *data_ptr = data;
-    *size_ptr = size;
     return 0;
 }
 
 int load_entities() {
-    uint8_t *data;
-    size_t size;
-    int file_err = load_file("dos/S_DAVE.DD2", &data, &size);
+    file_t f;
+    int file_err = load_file("dos/S_DAVE.DD2", &f);
     if (file_err != 0) {
         return file_err;
     }
 
-    huff_src src = { data, (size_t) size };
+    huff_src src = { f.data, f.len };
     size_t len;
     huff_err err = huff_len(src, &len);
     if (err != 0) {
         printf("huff error: %d", err);
-        free(data);
+        free(f.data);
         return 1;
     }
-    printf("read %zd bytes, %zd bytes decoded\n", size, len);
+    printf("read %zd bytes, %zd bytes decoded\n", f.len, len);
 
     uint8_t *dst = (uint8_t *)malloc((size_t) len);
     if (!dst) {
-        free(data);
+        free(f.data);
         printf("could not allocate destination buffer");
         return 1;
     }
@@ -103,8 +104,8 @@ int load_entities() {
 
     printf("decoded %zd bytes\n", len);
 
-
-    free(data);
+    free(f.data);
+    free(dst);
     return 0;
 }
 
@@ -150,9 +151,8 @@ enum {
 static const char *PPM_HEADER = "P6\n%d %d\n255\n";
 
 int load_tiles() {
-    uint8_t *data;
-    size_t size;
-    int file_err = load_file("dos/EGATILES.DD2", &data, &size);
+    file_t f;
+    int file_err = load_file("dos/EGATILES.DD2", &f);
     if (file_err != 0) {
         return file_err;
     }
@@ -160,12 +160,14 @@ int load_tiles() {
     IndexedSprite spr[TILES_COUNT];
     memset(spr, 0, sizeof(spr));
 
-    for (int t = 0; (t + 1) * TILES_STRIDE < size; t += 1) {
-        decode_ega_bitplanes((uint8_t *)(spr + t), data + (t * TILES_STRIDE), TILE_W, TILE_H);
+    for (int t = 0; (t + 1) * TILES_STRIDE < f.len; t += 1) {
+        decode_ega_bitplanes((uint8_t *)(spr + t), f.data + (t * TILES_STRIDE), TILE_W, TILE_H);
     }
 
+    free(f.data);
+
     FILE *fp;
-    file_err = fopen_s(&fp, "output.ppm", "wb");
+    file_err = fopen_s(&fp, "ega_tiles.ppm", "wb");
     if (file_err != 0) {
         printf("could not open output sprite file\n");
     }
@@ -196,15 +198,23 @@ int load_tiles() {
 
     fclose(fp);
 
-    printf("loading tiles, %zd bytes, %zd sprites\n", size, size / 128);
+    printf("loading tiles, %zd bytes, %zd sprites\n", f.len, f.len / 128);
     return 0;
 }
 
+int load_title() {
+    return 0;
+}
 
 int main(int argc, char *argv[]) {
     if (argc == 2 && strcmp(argv[1], "tiles") == 0) {
         return load_tiles();
     }
+
+    if (argc == 2 && strcmp(argv[1], "title") == 0) {
+        return load_title();
+    }
+
 
     load_entities();
 }
