@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "types.h"
+
 #include "huff.cpp"
 
 /**
@@ -113,10 +115,11 @@ typedef struct {
     uint8_t r;
     uint8_t g;
     uint8_t b;
-} Color24; // 24 bit Colour RGB
-typedef uint8_t IndexedSprite[256]; // 16x16 EGA Sprite (16 color)
+} color24_t; // 24 bit Colour RGB
 
-static const Color24 EGA_PALETTE[16] = {
+typedef byte tile_sprite_t[256];
+
+static const color24_t EGA_PALETTE[16] = {
     { 0x00, 0x00, 0x00 }, // 0  Black
     { 0x00, 0x00, 0xAA }, // 1  Blue
     { 0x00, 0xAA, 0x00 }, // 2  Green
@@ -157,7 +160,7 @@ int load_tiles() {
         return file_err;
     }
 
-    IndexedSprite spr[TILES_COUNT];
+    tile_sprite_t spr[TILES_COUNT];
     memset(spr, 0, sizeof(spr));
 
     for (int t = 0; (t + 1) * TILES_STRIDE < f.len; t += 1) {
@@ -171,14 +174,6 @@ int load_tiles() {
     if (file_err != 0) {
         printf("could not open output sprite file\n");
     }
-
-    // char header[64];
-    // sprintf(header, PPM_HEADER, 1 * 16, 1 * 16);
-    // fwrite(header, 1, strlen(header), fp);
-    //
-    // for (int i = 0; i < 256; i++) {
-    //     fwrite(EGA_PALETTE + spr[0][i], 1, 3, fp);
-    // }
 
     char header[64];
     sprintf(header, PPM_HEADER, TILES_WIDTH * TILE_W, TILES_HEIGHT * TILE_H);
@@ -203,6 +198,37 @@ int load_tiles() {
 }
 
 int load_title() {
+    file_t f;
+    int file_err = load_file("dos/TITLE1.DD2", &f);
+    if (file_err != 0) {
+        return file_err;
+    }
+    printf("loaded title file %zd bytes", f.len);
+
+    byte data[320 * 200];
+    memset(data, 0, sizeof(data));
+    // The first 8 bytes of the title screens are "PIC\x00\x28\x00\c8\00". That
+    // seems to read as 40 x 200, which is likely the byte length of a scanline
+    // for the image.  I'm just skipping them here for brevity.
+    decode_ega_bitplanes((uint8_t *)data, f.data + 8, 320, 200);
+
+    free(f.data);
+
+    FILE *fp;
+    file_err = fopen_s(&fp, "title1.ppm", "wb");
+    if (file_err != 0) {
+        printf("could not open output sprite file\n");
+    }
+
+    char header[64];
+    sprintf(header, PPM_HEADER, 320, 200);
+    fwrite(header, 1, strlen(header), fp);
+    for (int i = 0; i < 320 * 200; i++) {
+        fwrite(EGA_PALETTE + data[i], 3, 1, fp);
+    }
+
+    fclose(fp);
+
     return 0;
 }
 
