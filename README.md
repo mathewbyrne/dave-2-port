@@ -13,16 +13,7 @@ Goals of this project include:
 - Should be able to compile and run on modern hardware.
 - Is not aiming to be compilable on DOS at this stage.
 
-## Directories
-
-Note: proprietary data will not be committed to this repostiory.
-
-dos - original dos source and assets
-bin - supporting binary executables
-reverse - decompiled sources
-    /dave-unpacked uncompressed executable sourced from dos/DAVE
-src - source code of the port
-
 ## References
 
 - Data assets decompiled https://github.com/gmegidish/dangerous-dave-re
+
