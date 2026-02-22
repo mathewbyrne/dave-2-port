@@ -18,16 +18,15 @@ huff_err huff_len(const huff_src src, size_t *out) {
         return err;
     }
 
-    // 4 bytes are used to store the offset, we need to widen that to sizeof(size_t)
-    long _out = *(long *)(src.ptr + HUFF_OFFSET_LEN);
-    *out = (size_t) _out;
+    long decoded_len = *(long *)(src.ptr + HUFF_OFFSET_LEN);
+    *out = (size_t) decoded_len;
     return HUFF_OK;
 }
 
-struct huff_node {
+typedef struct {
     uint16_t bit0;
     uint16_t bit1;
-};
+} huff_node;
 
 static huff_node huff_node_list[HUFF_NODE_LIST_LEN + 1];
 static huff_node *huff_node_root = huff_node_list + HUFF_NODE_LIST_ROOT;
@@ -42,9 +41,9 @@ huff_err huff_decode(const huff_src src, uint8_t *dst, size_t len) {
 
     const uint8_t *stream_ptr = src.ptr + HUFF_OFFSET_STREAM;
     huff_node *node_ptr = huff_node_root;
-    int dst_i = 0;
+    size_t dst_i = 0;
 
-    for (int i = 0; i < src.len; i++) {
+    for (size_t i = 0; i < src.len; i++) {
         uint8_t data = stream_ptr[i];
         uint8_t mask = 1;
         for (int b = 0; b < 8; b++) {
@@ -56,7 +55,7 @@ huff_err huff_decode(const huff_src src, uint8_t *dst, size_t len) {
                 }
                 node_ptr = huff_node_root;
             } else {
-                int next_i = next - 0x100;
+                uint16_t next_i = next - 0x100;
                 if (next_i >= HUFF_NODE_LIST_LEN) {
                     return HUFF_ERR_NODE_INDEX;
                 }
@@ -68,4 +67,3 @@ huff_err huff_decode(const huff_src src, uint8_t *dst, size_t len) {
 
     return HUFF_ERR_SRC_UNDERFLOW;
 }
-
