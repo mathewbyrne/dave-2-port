@@ -13,6 +13,12 @@ Goals of this project include:
 - Should be able to compile and run on modern hardware.
 - Is not aiming to be compilable on DOS at this stage.
 
+## Running
+
+Users will need to provide the original game assets in the `dos` directory.  The
+`DAVE.EXE` file is usually compressed with `LZEXE` and needs to be decompressed
+using [`UNLZEXE`](https://keenwiki.shikadi.net/wiki/UNLZEXE) manually.
+
 ## References
 
 - Data assets decompiled https://github.com/gmegidish/dangerous-dave-re

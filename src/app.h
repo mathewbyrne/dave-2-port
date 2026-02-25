@@ -1,29 +1,38 @@
 #ifndef APP_H
 #define APP_H
 
+#include "ega.h"
+
 #include <stdint.h>
 
 enum {
-    GAME_SCREEN_WIDTH = 320,
-    GAME_SCREEN_HEIGHT = 200,
-    GAME_SCREEN_PIXELS = GAME_SCREEN_WIDTH * GAME_SCREEN_HEIGHT,
+    GAME_STATE_ASSET_CAP   = 1024 * 1024,
+    GAME_STATE_SCRATCH_CAP = 128 * 1024,
 };
 
 typedef struct {
-    int width;
-    int height;
+    // memory
+    uint8_t asset_mem[GAME_STATE_ASSET_CAP];
+    uint8_t scratch_mem[GAME_STATE_SCRATCH_CAP];
 
-    uint8_t buffer[GAME_SCREEN_WIDTH * GAME_SCREEN_HEIGHT];
+    ega_arena_t asset_arena;
+    ega_arena_t scratch_arena;
 
-    uint8_t title_pixels[2][GAME_SCREEN_PIXELS];
+    ega_buffer_t *buffer;
+
+    ega_buffer_t *title_1;
+    ega_buffer_t *title_2;
+
+    uint16_t width, height;
 
     uint16_t screen_offset_x;
     uint16_t t;
-    float tick_accumulator;
+    float    tick_accumulator;
     uint32_t tick;
 } game_state_t;
 
 void game_init(game_state_t *state, int width, int height);
-void game_tick(game_state_t *state, float dt_seconds, uint32_t *out_pixels, int out_width, int out_height);
+void game_tick(game_state_t *state, float dt_seconds, uint32_t *out_pixels,
+               int out_width, int out_height);
 
 #endif

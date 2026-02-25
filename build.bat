@@ -10,7 +10,7 @@ pushd build
 if "%TARGET%"=="unpack" (
     cl -nologo -FC -Zi -W4 -std:c17 -TP ..\src\unpack.cpp -Fe:unpack.exe
 ) else if "%TARGET%"=="game" (
-    cl -nologo -FC -Zi -W4 -std:c17 -TP ..\src\platform_win32.cpp -Fe:dave2.exe /link user32.lib gdi32.lib
+    cl -nologo -FC -Zi -W4 -wd 4100 -std:c17 -TP ..\src\platform_win32.cpp -Fe:dave2.exe /link user32.lib gdi32.lib
 ) else (
     echo Unknown target "%TARGET%".
     echo Usage: build.bat [game^|unpack]
