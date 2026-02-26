@@ -18,6 +18,23 @@ enum {
 };
 
 typedef struct {
+    uint8_t toggle_pause;
+    uint8_t next_scene;
+} game_input_t;
+
+typedef enum {
+    GAME_SCENE_LOADING,
+    GAME_SCENE_TITLE,
+    GAME_SCENE_LEVEL,
+} game_scene_t;
+
+typedef enum {
+    GAME_MENU_HIDDEN,
+    GAME_MENU_OPENING,
+    GAME_MENU_OPEN,
+} game_menu_state_t;
+
+typedef struct {
     // memory
     uint8_t asset_mem[GAME_STATE_ASSET_CAP];
     uint8_t scratch_mem[GAME_STATE_SCRATCH_CAP];
@@ -37,11 +54,17 @@ typedef struct {
     float    tick_accumulator;
     uint32_t tick;
 
+    game_scene_t      scene;
+    game_menu_state_t menu_state;
+    uint16_t          menu_anim_ticks;
+    uint16_t          loading_step;
+    uint16_t          loading_step_count;
+
     ega_buffer_t *exec_sprites[EXEC_SPRITE_COUNT];
 } game_state_t;
 
-void game_init(game_state_t *state, int width, int height);
-void game_tick(game_state_t *state, float dt_seconds, uint32_t *out_pixels, int out_width,
-               int out_height);
+void game_init(game_state_t *state);
+void game_tick(game_state_t *state, const game_input_t *input, float dt_seconds,
+               uint32_t *out_pixels, int out_width, int out_height);
 
 #endif
