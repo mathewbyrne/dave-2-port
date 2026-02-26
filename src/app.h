@@ -8,6 +8,13 @@
 enum {
     GAME_STATE_ASSET_CAP   = 1024 * 1024,
     GAME_STATE_SCRATCH_CAP = 128 * 1024,
+
+    // TODO Ok these offsets are going to be brittle, depending on how someone is
+    // able to uncompress the executable.  What we do probably know is that they
+    // will be paragraph aligned since they will be at the start of a segment.
+    EXEC_SPRITE_DATA_OFFSET = 0x18970,
+    EXEC_SPRITE_DATA_STRIDE = 0x33B0,
+    EXEC_SPRITE_COUNT       = 32,
 };
 
 typedef struct {
@@ -29,10 +36,12 @@ typedef struct {
     uint16_t t;
     float    tick_accumulator;
     uint32_t tick;
+
+    ega_buffer_t *exec_sprites[EXEC_SPRITE_COUNT];
 } game_state_t;
 
 void game_init(game_state_t *state, int width, int height);
-void game_tick(game_state_t *state, float dt_seconds, uint32_t *out_pixels,
-               int out_width, int out_height);
+void game_tick(game_state_t *state, float dt_seconds, uint32_t *out_pixels, int out_width,
+               int out_height);
 
 #endif

@@ -75,7 +75,6 @@ static void decode_title(const char *filename, ega_buffer_t *dst) {
     dst->w = EGA_SCREEN_WIDTH;
     dst->h = EGA_SCREEN_HEIGHT;
 
-    // TODO implement ega decode with ega_buffer_t
     ega_decode_4_plane(dst->data, data + TITLE_FILE_HEADER_BYTES,
                        EGA_SCREEN_WIDTH * EGA_SCREEN_HEIGHT / 8, 0);
     free(data);
@@ -88,11 +87,39 @@ static void load_titles(game_state_t *state) {
     decode_title("dos/TITLE2.DD2", state->title_2);
 }
 
-// TODO Ok these offsets are going to be brittle, depending on how someone is
-// able to uncompress the executable.  What we do probably know is that they
-// will be paragraph aligned since they will be at the start of a segment.
-#define EXEC_SPRITE_DATA_OFFSET 0x18970
-#define EXEC_SPRITE_DATA_STRIDE 0x33B0
+enum {
+    EXEC_SPR_NONE,
+
+    EXEC_SPR_WINDOW_NW,
+    EXEC_SPR_WINDOW_N1,
+    EXEC_SPR_WINDOW_N2,
+    EXEC_SPR_WINDOW_NE,
+    EXEC_SPR_WINDOW_W,
+    EXEC_SPR_WINDOW_E,
+    EXEC_SPR_WINDOW_SW,
+    EXEC_SPR_WINDOW_S1,
+    EXEC_SPR_WINDOW_S2,
+    EXEC_SPR_WINDOW_SE,
+
+    EXEC_SPR_DOT_1,
+    EXEC_SPR_DOT_2,
+    EXEC_SPR_DOT_3,
+    EXEC_SPR_DOT_4,
+    EXEC_SPR_DOT_5,
+    EXEC_SPR_DOT_6,
+
+    EXEC_SPR_ARROW_N,
+    EXEC_SPR_ARROW_NE,
+    EXEC_SPR_ARROW_E,
+    EXEC_SPR_ARROW_SE,
+    EXEC_SPR_ARROW_S,
+    EXEC_SPR_ARROW_SW,
+    EXEC_SPR_ARROW_W,
+    EXEC_SPR_ARROW_NW,
+
+    EXEC_SPR_WINDOW_BG,
+    EXEC_SPR_WINDOW_BG_LEN = 7, // 7 consecutive window background sprites (all white)
+};
 
 void load_executable_assets(game_state_t *state) {
     uint8_t *data = 0;
@@ -100,7 +127,12 @@ void load_executable_assets(game_state_t *state) {
 
     ASSERT(load_file("dos/DAVE.EXE", &data, &len) == 0);
 
-    // Load assets contained in the binary
+    uint16_t offset = EXEC_SPRITE_DATA_STRIDE - 8;
+    for (int i = 0; i < EXEC_SPRITE_COUNT; i++) {
+        state->exec_sprites[i] = ega_buffer_alloc(&state->asset_arena, 8, 8);
+        ega_decode_4_plane(state->exec_sprites[i]->data, data + EXEC_SPRITE_DATA_OFFSET + 8 * i, 8,
+                           offset);
+    }
 
     free(data);
 }
@@ -116,7 +148,7 @@ void game_init(game_state_t *state) {
     state->buffer = ega_buffer_alloc(&state->scratch_arena, state->width, state->height);
 
     load_titles(state);
-    //    load_executable_assets(state);
+    load_executable_assets(state);
 }
 
 static void render_title_scroll(game_state_t *state) {
@@ -126,6 +158,10 @@ static void render_title_scroll(game_state_t *state) {
                     EGA_SCREEN_HEIGHT);
     ega_buffer_blit(state->buffer, state->title_2, -1 * scroll_px + EGA_SCREEN_WIDTH, 0, 0, 0,
                     EGA_SCREEN_WIDTH, EGA_SCREEN_HEIGHT);
+
+    for (int i = 0; i < EXEC_SPRITE_COUNT; i++) {
+        ega_buffer_blit(state->buffer, state->exec_sprites[i], 8 * i, 8, 0, 0, 8, 8);
+    }
 }
 
 #define FADE_TICK 9
