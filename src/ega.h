@@ -67,23 +67,44 @@ typedef struct ega_buffer_t {
 
 ega_buffer_t *ega_buffer_alloc(ega_arena_t *a, uint16_t w,
                                uint16_t h); // stride == w
-ega_buffer_t *ega_buffer_alloc_stride(ega_arena_t *a, uint16_t w, uint16_t h,
-                                      uint16_t stride);
+ega_buffer_t *ega_buffer_alloc_stride(ega_arena_t *a, uint16_t w, uint16_t h, uint16_t stride);
 size_t        ega_buffer_data_bytes(const ega_buffer_t *b);
 
 static inline uint8_t *ega_buffer_px(ega_buffer_t *b, uint16_t x, uint16_t y) {
     return b->data + (size_t)y * (size_t)b->stride + (size_t)x;
 }
 
-static inline const uint8_t *ega_buffer_cpx(const ega_buffer_t *b, uint16_t x,
-                                            uint16_t y) {
-    return b->data + (size_t)y * (size_t)b->stride + (size_t)x;
-}
+/**
+ * ega_buffer_blit copies src pixels into dst.  Both source and destination coordinates and widths
+ * are signed and can be outside either source or destination, which will result in no pixels
+ * copied.
+ */
+void ega_buffer_blit(ega_buffer_t *dst, const ega_buffer_t *src, int dst_x, int dst_y, int src_x,
+                     int src_y, int w, int h);
+/**
+ * ega_buffer_blit_masked has the same geometry semantics as ega_buffer_blit, but additionally takes
+ * a mask buffer.  A 0 index in a mask indicates transparent, where non-zero equals opaque.  Mask
+ * is sampled in source space, and should match src dims.
+ */
+void ega_buffer_blit_masked(ega_buffer_t *dst, const ega_buffer_t *src, const ega_buffer_t *mask,
+                            int dst_x, int dst_y, int src_x, int src_y, int w, int h);
 
-void ega_render_buffer(uint32_t *dst, const uint8_t *src, const int w,
-                       const int h, const uint8_t *pal);
-void ega_decode_4_plane(uint8_t *dst, const uint8_t *src, uint16_t len,
-                        uint16_t offset);
+/**
+ * ega_render_buffer takes a destination buffer of variable size and renders the contents of src by
+ * sampling each pixel in dst.  pal can be provided to map palette indexes between one another and
+ * should be a pointer to a 16 index array.
+ */
+void ega_render_buffer(uint32_t *dst, const uint8_t *src, const int w, const int h,
+                       const uint8_t *pal);
+
+/**
+ * ega_decode_4_plane takes an input buffer, and decodes 16 index bitplanes.egacpp len should be the
+ * number of bytes per plane.  len * 8 bytes will be written to dst.  offset can be > 0 in cases
+ * where the bitplanes are not sequential in src.
+ *
+ * ega_decode_1_plane is the same but for a single bitplane, primarily used for transparency masks.
+ */
+void ega_decode_4_plane(uint8_t *dst, const uint8_t *src, uint16_t len, uint16_t offset);
 void ega_decode_1_plane(uint8_t *dst, const uint8_t *src, uint16_t len);
 
 #endif

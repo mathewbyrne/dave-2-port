@@ -82,10 +82,8 @@ static void decode_title(const char *filename, ega_buffer_t *dst) {
 }
 
 static void load_titles(game_state_t *state) {
-    state->title_1 =
-        ega_buffer_alloc(&state->asset_arena, state->width, state->height);
-    state->title_2 =
-        ega_buffer_alloc(&state->asset_arena, state->width, state->height);
+    state->title_1 = ega_buffer_alloc(&state->asset_arena, state->width, state->height);
+    state->title_2 = ega_buffer_alloc(&state->asset_arena, state->width, state->height);
     decode_title("dos/TITLE1.DD2", state->title_1);
     decode_title("dos/TITLE2.DD2", state->title_2);
 }
@@ -110,15 +108,12 @@ void load_executable_assets(game_state_t *state) {
 void game_init(game_state_t *state) {
     memset(state, 0, sizeof(*state));
 
-    ega_arena_init(&state->asset_arena, &state->asset_mem,
-                   GAME_STATE_ASSET_CAP);
-    ega_arena_init(&state->scratch_arena, &state->scratch_mem,
-                   GAME_STATE_SCRATCH_CAP);
+    ega_arena_init(&state->asset_arena, &state->asset_mem, GAME_STATE_ASSET_CAP);
+    ega_arena_init(&state->scratch_arena, &state->scratch_mem, GAME_STATE_SCRATCH_CAP);
 
     state->width  = EGA_SCREEN_WIDTH;
     state->height = EGA_SCREEN_HEIGHT;
-    state->buffer =
-        ega_buffer_alloc(&state->scratch_arena, state->width, state->height);
+    state->buffer = ega_buffer_alloc(&state->scratch_arena, state->width, state->height);
 
     load_titles(state);
     //    load_executable_assets(state);
@@ -127,41 +122,27 @@ void game_init(game_state_t *state) {
 static void render_title_scroll(game_state_t *state) {
     int scroll_px = (int)state->screen_offset_x;
 
-    for (int y = 0; y < state->height; y++) {
-        for (int x = 0; x < state->width; x++) {
-            uint8_t ega_index = 0;
-            int     src_x     = scroll_px + x;
-            // Choose which title screen to sample from depend on x value.
-            if (src_x < state->width) {
-                ega_index = state->title_1->data[y * state->width + src_x];
-            } else {
-                src_x -= state->width;
-                if (src_x < state->width) {
-                    ega_index = state->title_2->data[y * state->width + src_x];
-                }
-            }
-            state->buffer->data[y * state->width + x] = ega_index;
-        }
-    }
+    ega_buffer_blit(state->buffer, state->title_1, -1 * scroll_px, 0, 0, 0, EGA_SCREEN_WIDTH,
+                    EGA_SCREEN_HEIGHT);
+    ega_buffer_blit(state->buffer, state->title_2, -1 * scroll_px + EGA_SCREEN_WIDTH, 0, 0, 0,
+                    EGA_SCREEN_WIDTH, EGA_SCREEN_HEIGHT);
 }
 
 #define FADE_TICK 9
 
-void game_tick(game_state_t *state, float dt_seconds, uint32_t *out_pixels,
-               int out_width, int out_height) {
+void game_tick(game_state_t *state, float dt_seconds, uint32_t *out_pixels, int out_width,
+               int out_height) {
     state->tick_accumulator += dt_seconds;
     while (state->tick_accumulator >= (1.0f / 70.0f)) {
         state->tick_accumulator -= (1.0f / 70.0f);
 
         state->tick += 1;
         if (state->tick >= FADE_TICK * 6) {
-            if (state->t > TITLE_SCROLL_RIGHT_BEGIN &&
-                state->t <= TITLE_SCROLL_RIGHT_END) {
+            if (state->t > TITLE_SCROLL_RIGHT_BEGIN && state->t <= TITLE_SCROLL_RIGHT_END) {
                 state->screen_offset_x += TITLE_SCROLL_STEP;
             }
 
-            if (state->t > TITLE_SCROLL_LEFT_BEGIN &&
-                state->t <= TITLE_SCROLL_LEFT_END) {
+            if (state->t > TITLE_SCROLL_LEFT_BEGIN && state->t <= TITLE_SCROLL_LEFT_END) {
                 state->screen_offset_x -= TITLE_SCROLL_STEP;
             }
 
@@ -185,6 +166,5 @@ void game_tick(game_state_t *state, float dt_seconds, uint32_t *out_pixels,
     }
 
     render_title_scroll(state);
-    ega_render_buffer(out_pixels, state->buffer->data, out_width, out_height,
-                      pal);
+    ega_render_buffer(out_pixels, state->buffer->data, out_width, out_height, pal);
 }
