@@ -145,6 +145,24 @@ static void load_executable_assets(game_state_t *state) {
                            offset);
     }
 
+    uint16_t char_h = *(uint16_t *)(data + EXEC_FONT_SEG_OFFSET);
+    for (int i = 0; i < 256; i++) {
+        uint16_t char_offset = *(uint16_t *)(data + EXEC_FONT_OFFSETS_OFFSET + i * 2);
+        // Some characters just don't have sprite mappings.  Let's leave these as NULL for the
+        // time being, however maybe we can just have an empty sprite we assign for these?  A buffer
+        // with w = 0, h = 0 should render ok via the blitter.
+        if (char_offset == 0) {
+            continue;
+        }
+        uint8_t  char_w        = *(uint8_t *)(data + EXEC_FONT_WIDTHS_OFFSET + i);
+        uint16_t bytes_per_row = (char_w + 7) >> 3;
+        uint16_t block_size    = bytes_per_row * char_h;
+
+        state->glyphs[i] = ega_buffer_alloc(&state->asset_arena, char_w, char_h);
+        ega_decode_1_plane(state->glyphs[i]->data,
+                           data + EXEC_FONT_SEG_OFFSET + char_offset + block_size, block_size);
+    }
+
     free(data);
 }
 
@@ -186,6 +204,15 @@ static void render_level(game_state_t *state) {
 static void render_menu_overlay(game_state_t *state) {
     // TODO implement menu rendering
     ega_buffer_blit(state->buffer, state->exec_sprites[EXEC_SPR_WINDOW_NW], 8, 8, 0, 0, 8, 8);
+
+    uint16_t x = 8;
+    ega_buffer_blit(state->buffer, state->glyphs['D'], x, 8, 0, 0, 8, 10);
+    x += state->glyphs['D']->w;
+    ega_buffer_blit(state->buffer, state->glyphs['a'], x, 8, 0, 0, 8, 10);
+    x += state->glyphs['a']->w;
+    ega_buffer_blit(state->buffer, state->glyphs['v'], x, 8, 0, 0, 8, 10);
+    x += state->glyphs['v']->w;
+    ega_buffer_blit(state->buffer, state->glyphs['e'], x, 8, 0, 0, 8, 10);
 }
 
 static void set_scene(game_state_t *state, game_scene_t scene) {

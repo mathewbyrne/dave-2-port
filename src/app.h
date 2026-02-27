@@ -15,6 +15,21 @@ enum {
     EXEC_SPRITE_DATA_OFFSET = 0x18970,
     EXEC_SPRITE_DATA_STRIDE = 0x33B0,
     EXEC_SPRITE_COUNT       = 32,
+
+    // Format of the font storage within the executable:
+    //
+    // 0x000 uint16_t font height
+    // 0x002 uint16_t[256] table of character offsets
+    // 0x202 uint8[256] table of character widths in pixels
+    // 0x302 font pixel data
+    //
+    // A glyph is stored as a bitplane of ((w + 7) >> 3) * h bytes, however each offset stores
+    // 2x this.  The first block is some sort of EGA optimised draw mask, the second is the glyph
+    // pixel data.  So the second block at each character offset stores our mask.
+    EXEC_FONT_SEG_OFFSET     = 0x10740,
+    EXEC_FONT_OFFSETS_OFFSET = EXEC_FONT_SEG_OFFSET + 2,
+    EXEC_FONT_WIDTHS_OFFSET  = EXEC_FONT_SEG_OFFSET + 2 + (256 * 2),
+    EXEC_FONT_PIXEL_OFFSET   = EXEC_FONT_SEG_OFFSET + 2 + (256 * 2) + 256,
 };
 
 typedef struct {
@@ -61,6 +76,7 @@ typedef struct {
     uint16_t          loading_step_count;
 
     ega_buffer_t *exec_sprites[EXEC_SPRITE_COUNT];
+    ega_buffer_t *glyphs[256];
 } game_state_t;
 
 void game_init(game_state_t *state);

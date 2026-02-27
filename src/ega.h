@@ -90,6 +90,19 @@ void ega_buffer_blit_masked(ega_buffer_t *dst, const ega_buffer_t *src, const eg
                             int dst_x, int dst_y, int src_x, int src_y, int w, int h);
 
 /**
+ * ega_buffer_sprite has the same semantics as ega_buffer_blit_masked but always blits the full
+ * src buffer from 0, 0, to w, h.
+ */
+void ega_buffer_blit_sprite(ega_buffer_t *dst, const ega_buffer_t *src, const ega_buffer_t *mask,
+                            int dst_x, int dst_y);
+
+/**
+ * ega_buffer_blit_colour takes a mask buffer and writes into dst with colour into unmasked bits.
+ */
+void ega_buffer_blit_colour(ega_buffer_t *dst, const ega_buffer_t *mask, uint8_t colour, int dst_x,
+                            int dst_y);
+
+/**
  * ega_render_buffer takes a destination buffer of variable size and renders the contents of src by
  * sampling each pixel in dst.  pal can be provided to map palette indexes between one another and
  * should be a pointer to a 16 index array.
