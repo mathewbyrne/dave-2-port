@@ -4,8 +4,8 @@
 
 #include "types.h"
 
-#include "huff.cpp"
 #include "ega.cpp"
+#include "huff.cpp"
 
 #ifndef _MSC_VER
 static int fopen_s(FILE **fp, const char *filename, const char *mode) {
@@ -24,7 +24,7 @@ static const char *PPM_HEADER = "P6\n%d %d\n255\n";
 
 typedef struct {
     unsigned char *data;
-    size_t len;
+    size_t         len;
 } file_t;
 
 /**
@@ -44,7 +44,7 @@ int load_file(const char *filename, file_t *out) {
         printf("could not seek file");
         return 1;
     }
-    
+
     out->len = ftell(fp);
     if (out->len < 0) {
         fclose(fp);
@@ -74,13 +74,13 @@ int load_file(const char *filename, file_t *out) {
 
 int load_entities() {
     file_t f;
-    int file_err = load_file("dos/S_DAVE.DD2", &f);
+    int    file_err = load_file("dos/S_DAVE.DD2", &f);
     if (file_err != 0) {
         return file_err;
     }
 
-    huff_src src = { f.data, f.len };
-    size_t len;
+    huff_src src = {f.data, f.len};
+    size_t   len;
     huff_err err = huff_len(src, &len);
     if (err != 0) {
         printf("huff error: %d", err);
@@ -89,7 +89,7 @@ int load_entities() {
     }
     printf("read %zd bytes, %zd bytes decoded\n", f.len, len);
 
-    uint8_t *dst = (uint8_t *)malloc((size_t) len);
+    uint8_t *dst = (uint8_t *)malloc((size_t)len);
     if (!dst) {
         free(f.data);
         printf("could not allocate destination buffer");
@@ -107,7 +107,7 @@ int load_entities() {
         printf("\n");
     }
 
-    byte spr[512];
+    byte     spr[512];
     uint16_t w, h, l, o = 8;
     w = 24;
     h = 32;
@@ -137,7 +137,7 @@ int load_entities() {
     }
 
     // attempt to get our mask then.
-    ega_decode_1_plane(spr, dst + 2 + o + (4 * 5056), l);
+    // ega_decode_1_plane(spr, dst + 2 + o + (4 * 5056), l);
 
     sprintf(header, PPM_HEADER, w, h);
     fwrite(header, 1, strlen(header), fp);
@@ -151,7 +151,6 @@ int load_entities() {
     free(dst);
     return 0;
 }
-
 
 typedef byte tile_sprite_t[256];
 
@@ -168,10 +167,9 @@ enum {
     TILES_STRIDE       = (TILES_STRIDE_PLANE * 4),
 };
 
-
 int load_tiles() {
     file_t f;
-    int file_err = load_file("dos/EGATILES.DD2", &f);
+    int    file_err = load_file("dos/EGATILES.DD2", &f);
     if (file_err != 0) {
         return file_err;
     }
@@ -180,7 +178,8 @@ int load_tiles() {
     memset(spr, 0, sizeof(spr));
 
     for (int t = 0; (t + 1) * TILES_STRIDE < f.len; t += 1) {
-        ega_decode_4_plane((uint8_t *)(spr + t), f.data + (t * TILES_STRIDE), TILE_W * TILE_H / 8, 0);
+        ega_decode_4_plane((uint8_t *)(spr + t), f.data + (t * TILES_STRIDE), TILE_W * TILE_H / 8,
+                           0);
     }
 
     free(f.data);
@@ -215,7 +214,7 @@ int load_tiles() {
 
 int load_title() {
     file_t f;
-    int file_err = load_file("dos/TITLE1.DD2", &f);
+    int    file_err = load_file("dos/TITLE1.DD2", &f);
     if (file_err != 0) {
         return file_err;
     }
@@ -256,7 +255,6 @@ int main(int argc, char *argv[]) {
     if (argc == 2 && strcmp(argv[1], "title") == 0) {
         return load_title();
     }
-
 
     return load_entities();
 }

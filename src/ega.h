@@ -52,11 +52,21 @@ typedef struct ega_arena_t {
     size_t   off;
 } ega_arena_t;
 
-void   ega_arena_init(ega_arena_t *a, void *mem, size_t cap);
+/**
+ * ega_arena_init initialises an arena backed by storage with a maximum size of
+ * cap bytes.
+ */
+void ega_arena_init(ega_arena_t *a, void *mem, size_t cap);
+
+void ega_arena_clear(ega_arena_t *a);
+
+/**
+ * ega_arena_alloc allocates space within the arena of size with the given
+ * alignment.  Asserts that new allocation does not exceed arena size.
+ */
 void  *ega_arena_alloc(ega_arena_t *a, size_t size, size_t align);
 size_t ega_arena_mark(ega_arena_t *a);
 void   ega_arena_reset(ega_arena_t *a, size_t mark);
-void   ega_arena_clear(ega_arena_t *a);
 
 typedef struct ega_buffer_t {
     uint16_t w;

@@ -1,5 +1,7 @@
 #include "ega.h"
 
+#include <string.h>
+
 /**
  * ega_align_up takes a size and alignment and returns the lowest multiple of
  * alignment >= size.
@@ -10,20 +12,16 @@ static size_t ega_align_up(size_t v, size_t align) {
     return (v + (align - 1)) & ~(align - 1);
 }
 
-/**
- * ega_arena_init initialises an arena backed by storage with a maximum size of
- * cap bytes.
- */
 void ega_arena_init(ega_arena_t *a, void *storage, size_t cap) {
     a->base = (uint8_t *)storage;
     a->cap  = cap;
     a->off  = 0;
 }
 
-/**
- * ega_arena_alloc allocates space within the arena of size with the given
- * alignment.  Asserts that new allocation does not exceed arena size.
- */
+void ega_arena_clear(ega_arena_t *a) {
+    a->off = 0;
+}
+
 void *ega_arena_alloc(ega_arena_t *a, size_t size, size_t align) {
     size_t off = ega_align_up(a->off, align);
     EGA_ASSERT(off <= a->cap);
@@ -59,6 +57,10 @@ ega_buffer_t *ega_buffer_alloc_stride(ega_arena_t *a, uint16_t w, uint16_t h, ui
 
     memset(b->data, 0, bytes);
     return b;
+}
+
+size_t ega_buffer_data_bytes(const ega_buffer_t *b) {
+    return (size_t)b->stride * (size_t)b->h;
 }
 
 void ega_buffer_blit(ega_buffer_t *dst, const ega_buffer_t *src, int dst_x, int dst_y, int src_x,
@@ -287,7 +289,7 @@ void ega_buffer_blit_masked(ega_buffer_t *dst, const ega_buffer_t *src, const eg
         int x = 0;
         while (x < w) {
             // Skip transparent
-            while (x < w && m[x] == 0) {
+            while (x < w && m[x] != 0) {
                 x += 1;
             }
             if (x >= w)
@@ -295,7 +297,7 @@ void ega_buffer_blit_masked(ega_buffer_t *dst, const ega_buffer_t *src, const eg
 
             // Find run length
             int run = x;
-            while (run < w && m[run] != 0) {
+            while (run < w && m[run] == 0) {
                 run += 1;
             }
 
@@ -307,6 +309,89 @@ void ega_buffer_blit_masked(ega_buffer_t *dst, const ega_buffer_t *src, const eg
             }
 
             x = run;
+        }
+    }
+}
+
+void ega_buffer_blit_sprite(ega_buffer_t *dst, const ega_buffer_t *src, const ega_buffer_t *mask,
+                            int dst_x, int dst_y) {
+    ega_buffer_blit_masked(dst, src, mask, dst_x, dst_y, 0, 0, src->w, src->h);
+}
+
+void ega_buffer_blit_colour(ega_buffer_t *dst, const ega_buffer_t *mask, uint8_t colour, int dst_x,
+                            int dst_y) {
+    assert(dst);
+    assert(mask);
+
+    int w     = (int)mask->w;
+    int h     = (int)mask->h;
+    int src_x = 0;
+    int src_y = 0;
+
+    const int dst_w = (int)dst->w;
+    const int dst_h = (int)dst->h;
+
+    // Clip against destination (left/top)
+    if (dst_x < 0) {
+        int d = -dst_x;
+        if (d >= w)
+            return;
+        dst_x = 0;
+        src_x += d;
+        w -= d;
+    }
+    if (dst_y < 0) {
+        int d = -dst_y;
+        if (d >= h)
+            return;
+        dst_y = 0;
+        src_y += d;
+        h -= d;
+    }
+
+    // Clip against mask (right/bottom)
+    if (src_x >= (int)mask->w || src_y >= (int)mask->h) {
+        return;
+    }
+    if (src_x + w > (int)mask->w) {
+        w = (int)mask->w - src_x;
+        if (w <= 0)
+            return;
+    }
+    if (src_y + h > (int)mask->h) {
+        h = (int)mask->h - src_y;
+        if (h <= 0)
+            return;
+    }
+
+    // Clip against destination (right/bottom)
+    if (dst_x >= dst_w || dst_y >= dst_h) {
+        return;
+    }
+    if (dst_x + w > dst_w) {
+        w = dst_w - dst_x;
+        if (w <= 0)
+            return;
+    }
+    if (dst_y + h > dst_h) {
+        h = dst_h - dst_y;
+        if (h <= 0)
+            return;
+    }
+
+    uint8_t       *dst_base = dst->data + (size_t)dst_y * (size_t)dst->stride + (size_t)dst_x;
+    const uint8_t *msk_base = mask->data + (size_t)src_y * (size_t)mask->stride + (size_t)src_x;
+
+    const size_t dst_row = (size_t)dst->stride;
+    const size_t msk_row = (size_t)mask->stride;
+
+    for (int y = 0; y < h; y += 1) {
+        uint8_t       *d = dst_base + (size_t)y * dst_row;
+        const uint8_t *m = msk_base + (size_t)y * msk_row;
+        for (int x = 0; x < w; x += 1) {
+            if (m[x] != 0) {
+                d[x] = colour;
+            }
         }
     }
 }
@@ -341,11 +426,23 @@ void ega_decode_4_plane(uint8_t *dst, const uint8_t *src, uint16_t len, uint16_t
     }
 }
 
-void ega_decode_1_plane(uint8_t *dst, const uint8_t *src, uint16_t len) {
-    for (int i = 0; i < len; i++) {
-        for (int m = 0; m < 8; m++) {
-            uint8_t mask   = (uint8_t)(0x80 >> m);
-            dst[8 * i + m] = (uint8_t)((src[i] & mask) != 0);
+// void ega_decode_1_plane(uint8_t *dst, const uint8_t *src, uint16_t len)
+
+void ega_decode_1bpp(uint8_t *dst, const uint8_t *src, uint16_t w, uint16_t h) {
+    int bytes_per_row = (w + 7) >> 3;
+
+    for (int y = 0; y < h; y++) {
+        const uint8_t *row = src + y * bytes_per_row;
+        uint8_t       *out = dst + y * w;
+
+        int x = 0;
+        for (int i = 0; i < bytes_per_row; i++) {
+            uint8_t b = row[i];
+
+            for (int m = 0; m < 8 && x < w; m++, x++) {
+                uint8_t mask = (uint8_t)(0x80 >> m);
+                out[x]       = (uint8_t)((b & mask) != 0);
+            }
         }
     }
 }

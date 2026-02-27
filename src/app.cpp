@@ -159,11 +159,58 @@ static void load_executable_assets(game_state_t *state) {
         uint16_t block_size    = bytes_per_row * char_h;
 
         state->glyphs[i] = ega_buffer_alloc(&state->asset_arena, char_w, char_h);
-        ega_decode_1_plane(state->glyphs[i]->data,
-                           data + EXEC_FONT_SEG_OFFSET + char_offset + block_size, block_size);
+        ega_decode_1bpp(state->glyphs[i]->data,
+                        data + EXEC_FONT_SEG_OFFSET + char_offset + block_size, char_w, char_h);
     }
 
     free(data);
+}
+
+static void draw_char(game_state_t *state, char c, int x, int y) {
+    uint8_t idx = (uint8_t)c;
+    if (state->glyphs[idx] == 0) {
+        return;
+    }
+    ega_buffer_blit_colour(state->buffer, state->glyphs[c], 0, x, y);
+}
+
+int str_width_pixels(const game_state_t *state, const char *src) {
+    int length = 0;
+
+    const char *p = src;
+    while (*p) {
+        unsigned char c = (unsigned char)*p++;
+
+        // TODO Figure out what this control character does.
+        // Is it actually used in any strings anywhere?
+        if (c == 0x7f) {
+            if (*p) {
+                p++; // consume escape payload byte
+            }
+            continue;
+        }
+
+        const ega_buffer_t *g = state->glyphs[c];
+        if (g) {
+            length += g->w;
+        }
+    }
+
+    return length;
+}
+
+static void draw_string(game_state_t *state, char *str, int x, int y) {
+    while (*str) {
+        draw_char(state, *str, x, y);
+        x += state->glyphs[*str]->w;
+        str++;
+    }
+}
+
+static void draw_string_center(game_state_t *state, char *str, int y) {
+    int len = str_width_pixels(state, str);
+    int x   = (state->buffer->w - len) / 2;
+    draw_string(state, str, x, y);
 }
 
 static void fill_rect(ega_buffer_t *dst, int x, int y, int w, int h, uint8_t color) {
@@ -203,16 +250,26 @@ static void render_level(game_state_t *state) {
 
 static void render_menu_overlay(game_state_t *state) {
     // TODO implement menu rendering
+
     ega_buffer_blit(state->buffer, state->exec_sprites[EXEC_SPR_WINDOW_NW], 8, 8, 0, 0, 8, 8);
 
-    uint16_t x = 8;
-    ega_buffer_blit(state->buffer, state->glyphs['D'], x, 8, 0, 0, 8, 10);
-    x += state->glyphs['D']->w;
-    ega_buffer_blit(state->buffer, state->glyphs['a'], x, 8, 0, 0, 8, 10);
-    x += state->glyphs['a']->w;
-    ega_buffer_blit(state->buffer, state->glyphs['v'], x, 8, 0, 0, 8, 10);
-    x += state->glyphs['v']->w;
-    ega_buffer_blit(state->buffer, state->glyphs['e'], x, 8, 0, 0, 8, 10);
+    draw_string_center(state, "RESET GAME (Y/N)?", 16);
+
+    // fill_rect(state->buffer, 2, 2, 316, 196, 0xf);
+    // int x = 8;
+    // int y = 8;
+    // for (int i = 0; i < 16; i++) {
+    //     for (int j = 0; j < 16; j++) {
+    //         draw_char(state, i * 16 + j, x, y);
+    //         x += 10;
+    //     }
+    //     x = 8;
+    //     y += 10;
+    // }
+    //
+    // draw_string(state, "abcdefghijklmnopqrstuvwxyz", 8, 140);
+    // draw_string(state, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", 8, 150);
+    //
 }
 
 static void set_scene(game_state_t *state, game_scene_t scene) {
