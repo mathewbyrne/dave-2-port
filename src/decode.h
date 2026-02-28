@@ -1,5 +1,5 @@
-#ifndef HUFF_H
-#define HUFF_H
+#ifndef DECODE_H
+#define DECODE_H
 
 /**
  * utilities for working with huffman encoded binary streams
@@ -18,7 +18,7 @@
 
 struct huff_src {
     const uint8_t *ptr;
-    size_t len;
+    size_t         len;
 };
 
 typedef enum {
@@ -45,7 +45,7 @@ enum {
  * huff_len writes the length in bytes of a the uncompressed stream to out.
  * Returns non-zero if the src is not encoded correctly.
  */
-huff_err huff_len(const huff_src src, size_t *out);
+huff_err huff_len(size_t *out, const huff_src src);
 
 /**
  * huff_decode decodes the data from src into dst.  Ensure when calling that
@@ -53,8 +53,33 @@ huff_err huff_len(const huff_src src, size_t *out);
  * of bytes expected to be written.  An error will be returned if the number
  * of bytes does not match.
  */
-huff_err huff_decode(const huff_src src, uint8_t *dst, size_t len);
+huff_err huff_decode(uint8_t *dst, size_t len, const huff_src src);
 
+typedef enum {
+    RLE_OK = 0,
+    RLE_ERR_TRUNCATED,
+    RLE_ERR_DST_OVERFLOW,
+    RLE_ERR_SRC_REMAINS,
+} rle_err;
+
+enum {
+    RLE_BYTE_MARKER = 0xFE,
+};
+
+/**
+ * rle_decode expands byte-RLE encoded source into dst.
+ *
+ * Encoding format:
+ * - Any byte other than 0xFE is copied literally.
+ * - 0xFE introduces a run encoded as: 0xFE, count, value.
+ *   count copies of value are emitted.
+ *
+ * To encode a literal 0xFE byte, emit: 0xFE, 0x01, 0xFE.
+ *
+ * The decoder requires exact consumption of src_len bytes. If trailing source
+ * bytes remain after dst_len output bytes are produced, RLE_ERR_SRC_REMAINS is
+ * returned.
+ */
+rle_err rle_decode(uint8_t *dst, size_t dst_len, const uint8_t *src, size_t src_len);
 
 #endif
-

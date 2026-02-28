@@ -5,7 +5,7 @@
 #include "types.h"
 
 #include "ega.cpp"
-#include "huff.cpp"
+#include "decode.cpp"
 
 #ifndef _MSC_VER
 static int fopen_s(FILE **fp, const char *filename, const char *mode) {
@@ -13,12 +13,6 @@ static int fopen_s(FILE **fp, const char *filename, const char *mode) {
     return (*fp == 0);
 }
 #endif
-
-typedef struct {
-    uint8_t r;
-    uint8_t g;
-    uint8_t b;
-} color24_t; // 24 bit Colour RGB
 
 static const char *PPM_HEADER = "P6\n%d %d\n255\n";
 
@@ -81,7 +75,7 @@ int load_entities() {
 
     huff_src src = {f.data, f.len};
     size_t   len;
-    huff_err err = huff_len(src, &len);
+    huff_err err = huff_len(&len, src);
     if (err != 0) {
         printf("huff error: %d", err);
         free(f.data);
@@ -95,7 +89,7 @@ int load_entities() {
         printf("could not allocate destination buffer");
         return 1;
     }
-    huff_decode(src, dst, len);
+    huff_decode(dst, len, src);
 
     printf("decoded %zd bytes\n", len);
 

@@ -1,4 +1,4 @@
-#include "huff.h"
+#include "decode.h"
 
 #include <string.h>
 
@@ -12,7 +12,7 @@ huff_err huff_validate(const huff_src src) {
     return HUFF_OK;
 }
 
-huff_err huff_len(const huff_src src, size_t *out) {
+huff_err huff_len(size_t *out, const huff_src src) {
     huff_err err = huff_validate(src);
     if (err != HUFF_OK) {
         return err;
@@ -31,7 +31,7 @@ typedef struct {
 static huff_node huff_node_list[HUFF_NODE_LIST_LEN + 1];
 static huff_node *huff_node_root = huff_node_list + HUFF_NODE_LIST_ROOT;
 
-huff_err huff_decode(const huff_src src, uint8_t *dst, size_t len) {
+huff_err huff_decode(uint8_t *dst, size_t len, const huff_src src) {
     huff_err err = huff_validate(src);
     if (err != HUFF_OK) {
         return err;
@@ -66,4 +66,40 @@ huff_err huff_decode(const huff_src src, uint8_t *dst, size_t len) {
     }
 
     return HUFF_ERR_SRC_UNDERFLOW;
+}
+
+rle_err rle_decode(uint8_t *dst, size_t dst_len, const uint8_t *src, size_t src_len) {
+    size_t si = 0;
+    size_t di = 0;
+
+    while (di < dst_len) {
+        if (si >= src_len) {
+            return RLE_ERR_TRUNCATED;
+        }
+
+        uint8_t v = src[si++];
+        if (v != RLE_BYTE_MARKER) {
+            dst[di++] = v;
+            continue;
+        }
+
+        if ((si + 1) >= src_len) {
+            return RLE_ERR_TRUNCATED;
+        }
+
+        uint8_t count = src[si++];
+        uint8_t value = src[si++];
+
+        if ((size_t)count > (dst_len - di)) {
+            return RLE_ERR_DST_OVERFLOW;
+        }
+
+        memset(dst + di, value, count);
+        di += count;
+    }
+
+    if (si != src_len) {
+        return RLE_ERR_SRC_REMAINS;
+    }
+    return RLE_OK;
 }
