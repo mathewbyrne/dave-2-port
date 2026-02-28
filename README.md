@@ -15,11 +15,23 @@ Goals of this project include:
 
 ## Running
 
-Users will need to provide the original game assets in the `dos` directory.  The
+Users will need to provide the original game assets in the `dos` directory. The
 `DAVE.EXE` file is usually compressed with `LZEXE` and needs to be decompressed
 using [`UNLZEXE`](https://keenwiki.shikadi.net/wiki/UNLZEXE) manually.
+
+### Windows
+
+```bat
+build.bat
+```
+
+### macOS (Apple Silicon)
+
+```bash
+make
+./build/dave2-mac
+```
 
 ## References
 
 - Data assets decompiled https://github.com/gmegidish/dangerous-dave-re
-

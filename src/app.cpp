@@ -33,10 +33,17 @@ static const uint8_t g_fade_in_map16[4][16] = {
 };
 
 static int load_file(const char *filename, uint8_t **data, size_t *len) {
-    FILE *fp;
+    FILE *fp = 0;
+#if defined(_MSC_VER)
     if (fopen_s(&fp, filename, "rb") != 0) {
         return 1;
     }
+#else
+    fp = fopen(filename, "rb");
+    if (!fp) {
+        return 1;
+    }
+#endif
 
     if (fseek(fp, 0, SEEK_END) != 0) {
         fclose(fp);
