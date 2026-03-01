@@ -3,5 +3,7 @@ build
 dos
 reverse
 
+.vscode
+
 *.ppm
 

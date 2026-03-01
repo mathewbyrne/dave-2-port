@@ -56,30 +56,45 @@ huff_err huff_len(size_t *out, const huff_src src);
 huff_err huff_decode(uint8_t *dst, size_t len, const huff_src src);
 
 typedef enum {
-    RLE_OK = 0,
-    RLE_ERR_TRUNCATED,
-    RLE_ERR_DST_OVERFLOW,
-    RLE_ERR_SRC_REMAINS,
-} rle_err;
+    RLEW_OK = 0,
+    RLEW_ERR_NO_HEADER,
+    RLEW_ERR_TRUNCATED,
+    RLEW_ERR_ODD_LENGTH,
+    RLEW_ERR_DST_LEN_MISMATCH,
+    RLEW_ERR_DST_OVERFLOW,
+    RLEW_ERR_SRC_REMAINS,
+} rlew_err;
 
 enum {
-    RLE_BYTE_MARKER = 0xFE,
+    RLEW_WORD_MARKER = 0xFEFE,
+    RLEW_OFFSET_LEN  = 0x0,
+    RLEW_OFFSET_DATA = 0x4,
 };
 
 /**
- * rle_decode expands byte-RLE encoded source into dst.
+ * rlew_len writes the byte length of the decoded stream to out.
  *
- * Encoding format:
- * - Any byte other than 0xFE is copied literally.
- * - 0xFE introduces a run encoded as: 0xFE, count, value.
- *   count copies of value are emitted.
+ * Source format:
+ * - 4-byte little-endian uncompressed length in bytes
+ * - followed by RLEW-encoded 16-bit words
+ */
+rlew_err rlew_len(size_t *out, const uint8_t *src, size_t src_len);
+
+/**
+ * rlew_decode expands a RLEW encoded source into dst.
  *
- * To encode a literal 0xFE byte, emit: 0xFE, 0x01, 0xFE.
+ * Encoding format (word-based):
+ * - Any 16-bit word other than 0xFEFE is copied literally.
+ * - 0xFEFE introduces a run encoded as: marker, count_word, value_word.
+ *   count_word copies of value_word are emitted.
+ *
+ * The source starts with a 4-byte little-endian decoded-size header. dst_len
+ * must exactly match this header value.
  *
  * The decoder requires exact consumption of src_len bytes. If trailing source
- * bytes remain after dst_len output bytes are produced, RLE_ERR_SRC_REMAINS is
+ * bytes remain after dst_len output bytes are produced, RLEW_ERR_SRC_REMAINS is
  * returned.
  */
-rle_err rle_decode(uint8_t *dst, size_t dst_len, const uint8_t *src, size_t src_len);
+rlew_err rlew_decode(uint8_t *dst, size_t dst_len, const uint8_t *src, size_t src_len);
 
 #endif

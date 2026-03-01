@@ -83,6 +83,10 @@ typedef struct {
     ega_buffer_t *exec_sprites[EXEC_SPRITE_COUNT];
     ega_buffer_t *glyphs[256];
     ega_buffer_t *tiles[GAME_TILES_COUNT];
+
+    uint16_t level_w;
+    uint16_t level_h;
+    uint16_t level_tiles[64][64]; // TODO set sensible max and validate at loading
 } game_state_t;
 
 void game_init(game_state_t *state);

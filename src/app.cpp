@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "decode.cpp"
 #include "ega.cpp"
 #include "types.h"
 
@@ -115,6 +116,36 @@ static void load_tiles(game_state_t *state) {
     }
 
     free(data);
+}
+
+static void load_level(game_state_t *state, char *filename) {
+    uint8_t *data = 0;
+    size_t   len  = 0;
+    assert(load_file(filename, &data, &len) == 0);
+
+    size_t decode_len = 0;
+    assert(rlew_len(&decode_len, data, len) == 0);
+
+    uint8_t *decode_data = (uint8_t *)malloc(decode_len);
+    assert(rlew_decode(decode_data, decode_len, data, len) == 0);
+
+    // TODO do something with level data
+    uint16_t width        = *(uint16_t *)(decode_data + 0x00);
+    uint16_t height       = *(uint16_t *)(decode_data + 0x02);
+    uint16_t plane_count  = *(uint16_t *)(decode_data + 0x04);
+    uint16_t plane_stride = *(uint16_t *)(decode_data + 0x0E);
+
+    state->level_w = width;
+    state->level_h = height;
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            size_t idx               = (size_t)y * (size_t)width + (size_t)x; // word index
+            state->level_tiles[x][y] = *(uint16_t *)(decode_data + 0x20 + idx * 2);
+        }
+    }
+
+    free(data);
+    free(decode_data);
 }
 
 enum {
@@ -266,8 +297,9 @@ static void render_title_scroll(game_state_t *state) {
                     EGA_SCREEN_WIDTH, EGA_SCREEN_HEIGHT);
 
     for (int y = 0; y < 16; y++) {
-        for (int x = 0; x < 13; x++) {
-            ega_buffer_blit(state->buffer, state->tiles[y * 13 + x], x * 16, y * 16, 0, 0, 16, 16);
+        for (int x = 0; x < 22; x++) {
+            uint16_t idx = state->level_tiles[x + 2][y + 26];
+            ega_buffer_blit(state->buffer, state->tiles[idx], x * 16, y * 16, 0, 0, 16, 16);
         }
     }
 }
@@ -320,6 +352,7 @@ static void update_scene(game_state_t *state) {
         } else if (state->loading_step == 1) {
             load_executable_assets(state);
             load_tiles(state);
+            load_level(state, "dos/LEVEL01.DD2");
             state->loading_step++;
         } else {
             set_scene(state, GAME_SCENE_TITLE);
