@@ -17,6 +17,18 @@ static game_state_t       game_state;
 static game_input_t       game_input;
 static HCURSOR            g_arrow_cursor;
 
+static void win32_set_movement_key(WPARAM key, uint8_t is_down) {
+    if (key == VK_LEFT) {
+        game_input.move_left = is_down;
+    } else if (key == VK_RIGHT) {
+        game_input.move_right = is_down;
+    } else if (key == VK_UP) {
+        game_input.move_up = is_down;
+    } else if (key == VK_DOWN) {
+        game_input.move_down = is_down;
+    }
+}
+
 static void win32_resize_backbuffer(win32_backbuffer_t *buffer, int width, int height) {
     if (buffer->memory) {
         VirtualFree(buffer->memory, 0, MEM_RELEASE);
@@ -71,6 +83,7 @@ static LRESULT CALLBACK win32_main_window_proc(HWND window, UINT message, WPARAM
 
     case WM_SYSKEYDOWN:
     case WM_KEYDOWN: {
+        win32_set_movement_key(w_param, 1);
         if ((l_param & (1 << 30)) == 0) {
             if (w_param == VK_ESCAPE) {
                 game_input.toggle_pause = 1;
@@ -80,6 +93,10 @@ static LRESULT CALLBACK win32_main_window_proc(HWND window, UINT message, WPARAM
         }
         return 0;
     }
+    case WM_SYSKEYUP:
+    case WM_KEYUP:
+        win32_set_movement_key(w_param, 0);
+        return 0;
 
     default:
         return DefWindowProc(window, message, w_param, l_param);

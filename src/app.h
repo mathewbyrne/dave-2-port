@@ -13,6 +13,8 @@ enum {
     GAME_TILES_WIDTH  = 13,
     GAME_TILES_HEIGHT = 66,
     GAME_TILES_COUNT  = GAME_TILES_WIDTH * GAME_TILES_HEIGHT,
+    GAME_LEVEL_MAX_W  = 128,
+    GAME_LEVEL_MAX_H  = 128,
 
     // TODO Ok these offsets are going to be brittle, depending on how someone is
     // able to uncompress the executable.  What we do probably know is that they
@@ -40,6 +42,10 @@ enum {
 typedef struct {
     uint8_t toggle_pause;
     uint8_t next_scene;
+    uint8_t move_left;
+    uint8_t move_right;
+    uint8_t move_up;
+    uint8_t move_down;
 } game_input_t;
 
 typedef enum {
@@ -53,6 +59,13 @@ typedef enum {
     GAME_MENU_OPENING,
     GAME_MENU_OPEN,
 } game_menu_state_t;
+
+typedef enum {
+    LEVEL_ENTITY_ZOMBIE         = 0x0001,
+    LEVEL_ENTITY_DOOR_EXIT      = 0x8000,
+    LEVEL_ENTITY_DOOR_TREASURE1 = 0x8001,
+    LEVEL_ENTITY_PLAYER         = 0x00FF,
+} level_entity_t;
 
 typedef struct {
     // memory
@@ -86,7 +99,10 @@ typedef struct {
 
     uint16_t level_w;
     uint16_t level_h;
-    uint16_t level_tiles[64][64]; // TODO set sensible max and validate at loading
+    uint16_t level_tiles[GAME_LEVEL_MAX_W][GAME_LEVEL_MAX_H];
+    uint16_t level_plane2[GAME_LEVEL_MAX_W][GAME_LEVEL_MAX_H];
+    uint16_t level_camera_x;
+    uint16_t level_camera_y;
 } game_state_t;
 
 void game_init(game_state_t *state);

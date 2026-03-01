@@ -42,6 +42,18 @@ static void macos_resize_backbuffer(macos_backbuffer_t *buffer, int width, int h
 
 @implementation DaveView
 
+- (void)updateMovementKey:(unichar)c isDown:(BOOL)isDown {
+    if (c == NSLeftArrowFunctionKey) {
+        game_input.move_left = isDown ? 1 : 0;
+    } else if (c == NSRightArrowFunctionKey) {
+        game_input.move_right = isDown ? 1 : 0;
+    } else if (c == NSUpArrowFunctionKey) {
+        game_input.move_up = isDown ? 1 : 0;
+    } else if (c == NSDownArrowFunctionKey) {
+        game_input.move_down = isDown ? 1 : 0;
+    }
+}
+
 - (BOOL)isFlipped {
     return YES;
 }
@@ -62,11 +74,22 @@ static void macos_resize_backbuffer(macos_backbuffer_t *buffer, int width, int h
     }
 
     unichar c = [chars characterAtIndex:0];
+    [self updateMovementKey:c isDown:YES];
     if (c == 27) {
         game_input.toggle_pause = 1;
     } else if (c == 13 || c == 3 || c == ' ') {
         game_input.next_scene = 1;
     }
+}
+
+- (void)keyUp:(NSEvent *)event {
+    NSString *chars = [event charactersIgnoringModifiers];
+    if ([chars length] == 0) {
+        return;
+    }
+
+    unichar c = [chars characterAtIndex:0];
+    [self updateMovementKey:c isDown:NO];
 }
 
 - (void)drawRect:(NSRect)dirtyRect {
@@ -169,42 +192,45 @@ int main(int argc, const char **argv) {
         uint64_t last_counter = mach_absolute_time();
 
         while (g_running) {
-            for (;;) {
-                NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
-                                                    untilDate:[NSDate distantPast]
-                                                       inMode:NSDefaultRunLoopMode
-                                                      dequeue:YES];
-                if (!event) {
-                    break;
+            @autoreleasepool {
+                for (;;) {
+                    NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
+                                                        untilDate:[NSDate distantPast]
+                                                           inMode:NSDefaultRunLoopMode
+                                                          dequeue:YES];
+                    if (!event) {
+                        break;
+                    }
+                    [NSApp sendEvent:event];
                 }
-                [NSApp sendEvent:event];
+
+                NSRect  bounds = [view bounds];
+                CGFloat scale  = [window backingScaleFactor];
+                int     width  = (int)(bounds.size.width * scale);
+                int     height = (int)(bounds.size.height * scale);
+                if (width <= 0 || height <= 0) {
+                    width  = 320;
+                    height = 200;
+                }
+
+                if (!g_backbuffer.memory || g_backbuffer.width != width ||
+                    g_backbuffer.height != height) {
+                    macos_resize_backbuffer(&g_backbuffer, width, height);
+                }
+
+                uint64_t counter_now = mach_absolute_time();
+                float dt             = macos_dt_seconds(last_counter, counter_now, timebase);
+                last_counter         = counter_now;
+
+                game_tick(&game_state, &game_input, dt, (uint32_t *)g_backbuffer.memory,
+                          g_backbuffer.width, g_backbuffer.height);
+                game_input.toggle_pause = 0;
+                game_input.next_scene   = 0;
+
+                [view setNeedsDisplay:YES];
+                [view displayIfNeeded];
+                [NSApp updateWindows];
             }
-
-            NSRect  bounds = [view bounds];
-            CGFloat scale  = [window backingScaleFactor];
-            int     width  = (int)(bounds.size.width * scale);
-            int     height = (int)(bounds.size.height * scale);
-            if (width <= 0 || height <= 0) {
-                width  = 320;
-                height = 200;
-            }
-
-            if (!g_backbuffer.memory || g_backbuffer.width != width || g_backbuffer.height != height) {
-                macos_resize_backbuffer(&g_backbuffer, width, height);
-            }
-
-            uint64_t counter_now = mach_absolute_time();
-            float dt = macos_dt_seconds(last_counter, counter_now, timebase);
-            last_counter = counter_now;
-
-            game_tick(&game_state, &game_input, dt, (uint32_t *)g_backbuffer.memory, g_backbuffer.width,
-                      g_backbuffer.height);
-            game_input.toggle_pause = 0;
-            game_input.next_scene   = 0;
-
-            [view setNeedsDisplay:YES];
-            [view displayIfNeeded];
-            [NSApp updateWindows];
         }
 
         free(g_backbuffer.memory);

@@ -27,6 +27,7 @@ enum {
     TICK_RATE               = 70,
     FADE_TICK               = 9,
     MENU_OPENING_TICK_COUNT = 8,
+    LEVEL_SCROLL_STEP       = 4,
 };
 
 static const uint8_t g_fade_in_map16[4][16] = {
@@ -118,7 +119,7 @@ static void load_tiles(game_state_t *state) {
     free(data);
 }
 
-static void load_level(game_state_t *state, char *filename) {
+static void load_level(game_state_t *state, const char *filename) {
     uint8_t *data = 0;
     size_t   len  = 0;
     assert(load_file(filename, &data, &len) == 0);
@@ -134,13 +135,21 @@ static void load_level(game_state_t *state, char *filename) {
     uint16_t height       = *(uint16_t *)(decode_data + 0x02);
     uint16_t plane_count  = *(uint16_t *)(decode_data + 0x04);
     uint16_t plane_stride = *(uint16_t *)(decode_data + 0x0E);
+    size_t   plane0_off   = 0x20;
+    size_t   plane1_off   = plane0_off + plane_stride;
+
+    assert(width <= GAME_LEVEL_MAX_W);
+    assert(height <= GAME_LEVEL_MAX_H);
+    assert(plane_count >= 2);
+    assert((plane1_off + plane_stride) <= decode_len);
 
     state->level_w = width;
     state->level_h = height;
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
-            size_t idx               = (size_t)y * (size_t)width + (size_t)x; // word index
-            state->level_tiles[x][y] = *(uint16_t *)(decode_data + 0x20 + idx * 2);
+            size_t idx                = (size_t)y * (size_t)width + (size_t)x; // word index
+            state->level_tiles[x][y]  = *(uint16_t *)(decode_data + plane0_off + idx * 2);
+            state->level_plane2[x][y] = *(uint16_t *)(decode_data + plane1_off + idx * 2);
         }
     }
 
@@ -258,8 +267,11 @@ int str_width_pixels(const game_state_t *state, const char *src) {
 
 static void draw_string(game_state_t *state, char *str, int x, int y) {
     while (*str) {
-        draw_char(state, *str, x, y);
-        x += state->glyphs[(uint8_t)*str]->w;
+        ega_buffer_t *glyph = state->glyphs[(uint8_t)*str];
+        if (glyph) {
+            draw_char(state, *str, x, y);
+            x += glyph->w;
+        }
         str++;
     }
 }
@@ -288,6 +300,56 @@ static void fill_rect(ega_buffer_t *dst, int x, int y, int w, int h, uint8_t col
     }
 }
 
+static void draw_hex_digit_7x7(ega_buffer_t *dst, uint8_t value, int x, int y, uint8_t color) {
+    static const uint8_t g_hex_font_7x7[16][7] = {
+        {0x3e, 0x63, 0x73, 0x7b, 0x6f, 0x63, 0x3e}, // 0
+        {0x0c, 0x1c, 0x0c, 0x0c, 0x0c, 0x0c, 0x1e}, // 1
+        {0x3e, 0x63, 0x03, 0x0e, 0x38, 0x60, 0x7f}, // 2
+        {0x3e, 0x63, 0x03, 0x1e, 0x03, 0x63, 0x3e}, // 3
+        {0x06, 0x0e, 0x1e, 0x36, 0x7f, 0x06, 0x06}, // 4
+        {0x7f, 0x60, 0x7e, 0x03, 0x03, 0x63, 0x3e}, // 5
+        {0x1e, 0x30, 0x60, 0x7e, 0x63, 0x63, 0x3e}, // 6
+        {0x7f, 0x63, 0x03, 0x06, 0x0c, 0x18, 0x18}, // 7
+        {0x3e, 0x63, 0x63, 0x3e, 0x63, 0x63, 0x3e}, // 8
+        {0x3e, 0x63, 0x63, 0x3f, 0x03, 0x06, 0x3c}, // 9
+        {0x1c, 0x36, 0x63, 0x7f, 0x63, 0x63, 0x63}, // A
+        {0x7e, 0x63, 0x63, 0x7e, 0x63, 0x63, 0x7e}, // B
+        {0x3e, 0x63, 0x60, 0x60, 0x60, 0x63, 0x3e}, // C
+        {0x7c, 0x66, 0x63, 0x63, 0x63, 0x66, 0x7c}, // D
+        {0x7f, 0x60, 0x60, 0x7e, 0x60, 0x60, 0x7f}, // E
+        {0x7f, 0x60, 0x60, 0x7e, 0x60, 0x60, 0x60}, // F
+    };
+
+    if (value > 0x0f) {
+        return;
+    }
+
+    for (int row = 0; row < 7; row++) {
+        int py = y + row;
+        if (py < 0 || py >= dst->h) {
+            continue;
+        }
+
+        uint8_t bits = g_hex_font_7x7[value][row];
+        for (int col = 0; col < 7; col++) {
+            int px = x + col;
+            if (px < 0 || px >= dst->w) {
+                continue;
+            }
+            if (bits & (1u << (6 - col))) {
+                dst->data[(size_t)py * dst->stride + (size_t)px] = color;
+            }
+        }
+    }
+}
+
+static void draw_plane2_hex_2x2(ega_buffer_t *dst, uint16_t value, int x, int y, uint8_t color) {
+    draw_hex_digit_7x7(dst, (uint8_t)((value >> 12) & 0x0f), x + 1, y + 1, color);
+    draw_hex_digit_7x7(dst, (uint8_t)((value >> 8) & 0x0f), x + 8, y + 1, color);
+    draw_hex_digit_7x7(dst, (uint8_t)((value >> 4) & 0x0f), x + 1, y + 8, color);
+    draw_hex_digit_7x7(dst, (uint8_t)(value & 0x0f), x + 8, y + 8, color);
+}
+
 static void render_title_scroll(game_state_t *state) {
     int scroll_px = (int)state->screen_offset_x;
 
@@ -295,13 +357,6 @@ static void render_title_scroll(game_state_t *state) {
                     EGA_SCREEN_HEIGHT);
     ega_buffer_blit(state->buffer, state->title_2, -1 * scroll_px + EGA_SCREEN_WIDTH, 0, 0, 0,
                     EGA_SCREEN_WIDTH, EGA_SCREEN_HEIGHT);
-
-    for (int y = 0; y < 16; y++) {
-        for (int x = 0; x < 22; x++) {
-            uint16_t idx = state->level_tiles[x + 2][y + 26];
-            ega_buffer_blit(state->buffer, state->tiles[idx], x * 16, y * 16, 0, 0, 16, 16);
-        }
-    }
 }
 
 static void render_loading(game_state_t *state) {
@@ -309,7 +364,54 @@ static void render_loading(game_state_t *state) {
 }
 
 static void render_level(game_state_t *state) {
-    // TODO implement level rendering
+    int cam_x = (int)state->level_camera_x;
+    int cam_y = (int)state->level_camera_y;
+
+    fill_rect(state->buffer, 0, 0, EGA_SCREEN_WIDTH, EGA_SCREEN_HEIGHT, 0);
+
+    int first_tile_x = cam_x / TILE_WIDTH;
+    int first_tile_y = cam_y / TILE_HEIGHT;
+    int offset_x     = -(cam_x % TILE_WIDTH);
+    int offset_y     = -(cam_y % TILE_HEIGHT);
+
+    int tiles_x = (EGA_SCREEN_WIDTH / TILE_WIDTH) + 2;
+    int tiles_y = (EGA_SCREEN_HEIGHT / TILE_HEIGHT) + 2;
+
+    for (int ty = 0; ty < tiles_y; ty++) {
+        for (int tx = 0; tx < tiles_x; tx++) {
+            int map_x = first_tile_x + tx;
+            int map_y = first_tile_y + ty;
+            if (map_x < 0 || map_y < 0 || map_x >= state->level_w || map_y >= state->level_h) {
+                continue;
+            }
+
+            int      draw_x   = offset_x + tx * TILE_WIDTH;
+            int      draw_y   = offset_y + ty * TILE_HEIGHT;
+            uint16_t tile_idx = state->level_tiles[map_x][map_y];
+            if (tile_idx < GAME_TILES_COUNT && state->tiles[tile_idx]) {
+                ega_buffer_blit(state->buffer, state->tiles[tile_idx], draw_x, draw_y, 0, 0,
+                                TILE_WIDTH, TILE_HEIGHT);
+            }
+        }
+    }
+
+    for (int ty = 0; ty < tiles_y; ty++) {
+        for (int tx = 0; tx < tiles_x; tx++) {
+            int map_x = first_tile_x + tx;
+            int map_y = first_tile_y + ty;
+            if (map_x < 0 || map_y < 0 || map_x >= state->level_w || map_y >= state->level_h) {
+                continue;
+            }
+
+            int      draw_x       = offset_x + tx * TILE_WIDTH;
+            int      draw_y       = offset_y + ty * TILE_HEIGHT;
+            uint16_t plane2_value = state->level_plane2[map_x][map_y];
+            if (plane2_value != 0) {
+                fill_rect(state->buffer, draw_x, draw_y, TILE_WIDTH, TILE_HEIGHT, 0x0f);
+                draw_plane2_hex_2x2(state->buffer, plane2_value, draw_x, draw_y, 0x00);
+            }
+        }
+    }
 }
 
 static void render_menu_overlay(game_state_t *state) {
@@ -342,6 +444,47 @@ static void set_scene(game_state_t *state, game_scene_t scene) {
     state->tick             = 0;
     state->t                = 0;
     state->screen_offset_x  = 0;
+    state->level_camera_x   = 0;
+    state->level_camera_y   = 0;
+}
+
+static int clampi(int v, int lo, int hi) {
+    if (v < lo) {
+        return lo;
+    }
+    if (v > hi) {
+        return hi;
+    }
+    return v;
+}
+
+static void update_level(game_state_t *state, const game_input_t *input) {
+    int max_camera_x = state->level_w * TILE_WIDTH - EGA_SCREEN_WIDTH;
+    int max_camera_y = state->level_h * TILE_HEIGHT - EGA_SCREEN_HEIGHT;
+    if (max_camera_x < 0) {
+        max_camera_x = 0;
+    }
+    if (max_camera_y < 0) {
+        max_camera_y = 0;
+    }
+
+    int cam_x = (int)state->level_camera_x;
+    int cam_y = (int)state->level_camera_y;
+    if (input->move_left) {
+        cam_x -= LEVEL_SCROLL_STEP;
+    }
+    if (input->move_right) {
+        cam_x += LEVEL_SCROLL_STEP;
+    }
+    if (input->move_up) {
+        cam_y -= LEVEL_SCROLL_STEP;
+    }
+    if (input->move_down) {
+        cam_y += LEVEL_SCROLL_STEP;
+    }
+
+    state->level_camera_x = (uint16_t)clampi(cam_x, 0, max_camera_x);
+    state->level_camera_y = (uint16_t)clampi(cam_y, 0, max_camera_y);
 }
 
 static void update_scene(game_state_t *state) {
@@ -404,7 +547,7 @@ void game_init(game_state_t *state) {
 
 void game_tick(game_state_t *state, const game_input_t *input, float dt_seconds,
                uint32_t *out_pixels, int out_width, int out_height) {
-    game_input_t tick_input = {0, 0};
+    game_input_t tick_input = {};
     if (input) {
         tick_input = *input;
     }
@@ -412,6 +555,11 @@ void game_tick(game_state_t *state, const game_input_t *input, float dt_seconds,
     state->tick_accumulator += dt_seconds;
     while (state->tick_accumulator >= (1.0f / (float)TICK_RATE)) {
         state->tick_accumulator -= (1.0f / (float)TICK_RATE);
+
+        if (state->scene == GAME_SCENE_TITLE && (tick_input.move_left || tick_input.move_right ||
+                                                 tick_input.move_up || tick_input.move_down)) {
+            tick_input.next_scene = 1;
+        }
 
         if (tick_input.toggle_pause) {
             if (state->menu_state == GAME_MENU_HIDDEN) {
@@ -436,6 +584,9 @@ void game_tick(game_state_t *state, const game_input_t *input, float dt_seconds,
         update_menu(state);
 
         if (state->menu_state == GAME_MENU_HIDDEN) {
+            if (state->scene == GAME_SCENE_LEVEL) {
+                update_level(state, &tick_input);
+            }
             update_scene(state);
         }
     }
