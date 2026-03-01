@@ -9,6 +9,11 @@ enum {
     GAME_STATE_ASSET_CAP   = 1024 * 1024,
     GAME_STATE_SCRATCH_CAP = 128 * 1024,
 
+    // Number of tiles in EGA_TILES
+    GAME_TILES_WIDTH  = 13,
+    GAME_TILES_HEIGHT = 66,
+    GAME_TILES_COUNT  = GAME_TILES_WIDTH * GAME_TILES_HEIGHT,
+
     // TODO Ok these offsets are going to be brittle, depending on how someone is
     // able to uncompress the executable.  What we do probably know is that they
     // will be paragraph aligned since they will be at the start of a segment.
@@ -77,6 +82,7 @@ typedef struct {
 
     ega_buffer_t *exec_sprites[EXEC_SPRITE_COUNT];
     ega_buffer_t *glyphs[256];
+    ega_buffer_t *tiles[GAME_TILES_COUNT];
 } game_state_t;
 
 void game_init(game_state_t *state);

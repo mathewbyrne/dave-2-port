@@ -3,7 +3,7 @@ UNAME_S := $(shell uname -s)
 UNAME_M := $(shell uname -m)
 
 CXX ?= clang++
-CXXFLAGS := -std=c++17 -g -Wall -Wextra -Wno-unused-parameter
+CXXFLAGS := -std=c++17 -g -O0 -fno-omit-frame-pointer -Wall -Wextra -Wno-unused-parameter
 
 GAME_BIN := $(BUILD_DIR)/dave2
 UNPACK_BIN := $(BUILD_DIR)/unpack

@@ -13,6 +13,9 @@ enum {
     TITLE_FILE_IMAGE_BYTES  = 4 * (GAME_SCREEN_PIXELS / 8),
     TITLE_FILE_BYTES        = TITLE_FILE_HEADER_BYTES + TITLE_FILE_IMAGE_BYTES,
 
+    TILE_WIDTH  = 16,
+    TILE_HEIGHT = 16,
+
     TITLE_SCROLL_STEP        = 4,
     TITLE_SCROLL_RIGHT_BEGIN = 200,
     TITLE_SCROLL_RIGHT_END   = 280,
@@ -98,6 +101,22 @@ static void load_titles(game_state_t *state) {
     decode_title("dos/TITLE2.DD2", state->title_2);
 }
 
+static void load_tiles(game_state_t *state) {
+    uint8_t *data = 0;
+    size_t   len  = 0;
+    assert(load_file("dos/EGATILES.DD2", &data, &len) == 0);
+
+    uint16_t stride = TILE_WIDTH * TILE_HEIGHT / 8;
+    assert(len == stride * 4 * GAME_TILES_COUNT);
+
+    for (uint16_t i = 0; (i + 1) * stride * 4 < len; i += 1) {
+        state->tiles[i] = ega_buffer_alloc(&state->asset_arena, TILE_WIDTH, TILE_HEIGHT);
+        ega_decode_4_plane(state->tiles[i]->data, data + i * stride * 4, stride, 0);
+    }
+
+    free(data);
+}
+
 enum {
     EXEC_SPR_NONE,
 
@@ -156,8 +175,8 @@ static void load_executable_assets(game_state_t *state) {
     for (int i = 0; i < 256; i++) {
         uint16_t char_offset = *(uint16_t *)(data + EXEC_FONT_OFFSETS_OFFSET + i * 2);
         // Some characters just don't have sprite mappings.  Let's leave these as NULL for the
-        // time being, however maybe we can just have an empty sprite we assign for these?  A buffer
-        // with w = 0, h = 0 should render ok via the blitter.
+        // time being, however maybe we can just have an empty sprite we assign for these?  A
+        // buffer with w = 0, h = 0 should render ok via the blitter.
         if (char_offset == 0) {
             continue;
         }
@@ -178,7 +197,7 @@ static void draw_char(game_state_t *state, char c, int x, int y) {
     if (state->glyphs[idx] == 0) {
         return;
     }
-    ega_buffer_blit_colour(state->buffer, state->glyphs[c], 0, x, y);
+    ega_buffer_blit_colour(state->buffer, state->glyphs[(uint8_t)c], 0, x, y);
 }
 
 int str_width_pixels(const game_state_t *state, const char *src) {
@@ -197,7 +216,7 @@ int str_width_pixels(const game_state_t *state, const char *src) {
             continue;
         }
 
-        const ega_buffer_t *g = state->glyphs[c];
+        const ega_buffer_t *g = state->glyphs[(uint8_t)c];
         if (g) {
             length += g->w;
         }
@@ -209,7 +228,7 @@ int str_width_pixels(const game_state_t *state, const char *src) {
 static void draw_string(game_state_t *state, char *str, int x, int y) {
     while (*str) {
         draw_char(state, *str, x, y);
-        x += state->glyphs[*str]->w;
+        x += state->glyphs[(uint8_t)*str]->w;
         str++;
     }
 }
@@ -245,6 +264,12 @@ static void render_title_scroll(game_state_t *state) {
                     EGA_SCREEN_HEIGHT);
     ega_buffer_blit(state->buffer, state->title_2, -1 * scroll_px + EGA_SCREEN_WIDTH, 0, 0, 0,
                     EGA_SCREEN_WIDTH, EGA_SCREEN_HEIGHT);
+
+    for (int y = 0; y < 16; y++) {
+        for (int x = 0; x < 13; x++) {
+            ega_buffer_blit(state->buffer, state->tiles[y * 13 + x], x * 16, y * 16, 0, 0, 16, 16);
+        }
+    }
 }
 
 static void render_loading(game_state_t *state) {
@@ -260,7 +285,7 @@ static void render_menu_overlay(game_state_t *state) {
 
     ega_buffer_blit(state->buffer, state->exec_sprites[EXEC_SPR_WINDOW_NW], 8, 8, 0, 0, 8, 8);
 
-    draw_string_center(state, "RESET GAME (Y/N)?", 16);
+    draw_string_center(state, (char *)"RESET GAME (Y/N)?", 16);
 
     // fill_rect(state->buffer, 2, 2, 316, 196, 0xf);
     // int x = 8;
@@ -294,6 +319,7 @@ static void update_scene(game_state_t *state) {
             state->loading_step++;
         } else if (state->loading_step == 1) {
             load_executable_assets(state);
+            load_tiles(state);
             state->loading_step++;
         } else {
             set_scene(state, GAME_SCENE_TITLE);
@@ -345,7 +371,7 @@ void game_init(game_state_t *state) {
 
 void game_tick(game_state_t *state, const game_input_t *input, float dt_seconds,
                uint32_t *out_pixels, int out_width, int out_height) {
-    game_input_t tick_input = {0};
+    game_input_t tick_input = {0, 0};
     if (input) {
         tick_input = *input;
     }
