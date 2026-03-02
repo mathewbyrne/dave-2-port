@@ -83,6 +83,11 @@ static LRESULT CALLBACK win32_main_window_proc(HWND window, UINT message, WPARAM
 
     case WM_SYSKEYDOWN:
     case WM_KEYDOWN: {
+        if (w_param == VK_F4 && (l_param & (1 << 29))) {
+            g_running = 0;
+            return 0;
+        }
+
         win32_set_movement_key(w_param, 1);
         if ((l_param & (1 << 30)) == 0) {
             if (w_param == VK_ESCAPE) {

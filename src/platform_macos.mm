@@ -42,6 +42,25 @@ static void macos_resize_backbuffer(macos_backbuffer_t *buffer, int width, int h
 
 @implementation DaveView
 
+- (BOOL)handleAppQuitShortcut:(NSEvent *)event {
+    NSEventModifierFlags mods = [event modifierFlags] & NSEventModifierFlagDeviceIndependentFlagsMask;
+    if ((mods & NSEventModifierFlagCommand) == 0) {
+        return NO;
+    }
+
+    NSString *chars = [[event charactersIgnoringModifiers] lowercaseString];
+    if ([chars length] == 0) {
+        return NO;
+    }
+
+    if ([chars characterAtIndex:0] == 'q') {
+        g_running = 0;
+        return YES;
+    }
+
+    return NO;
+}
+
 - (void)updateMovementKey:(unichar)c isDown:(BOOL)isDown {
     if (c == NSLeftArrowFunctionKey) {
         game_input.move_left = isDown ? 1 : 0;
@@ -68,6 +87,10 @@ static void macos_resize_backbuffer(macos_backbuffer_t *buffer, int width, int h
 }
 
 - (void)keyDown:(NSEvent *)event {
+    if ([self handleAppQuitShortcut:event]) {
+        return;
+    }
+
     NSString *chars = [event charactersIgnoringModifiers];
     if ([chars length] == 0) {
         return;
@@ -80,6 +103,13 @@ static void macos_resize_backbuffer(macos_backbuffer_t *buffer, int width, int h
     } else if (c == 13 || c == 3 || c == ' ') {
         game_input.next_scene = 1;
     }
+}
+
+- (BOOL)performKeyEquivalent:(NSEvent *)event {
+    if ([self handleAppQuitShortcut:event]) {
+        return YES;
+    }
+    return [super performKeyEquivalent:event];
 }
 
 - (void)keyUp:(NSEvent *)event {
