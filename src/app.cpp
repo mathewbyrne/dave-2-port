@@ -6,6 +6,7 @@
 
 #include "decode.cpp"
 #include "ega.cpp"
+#include "entities.cpp"
 #include "types.h"
 
 enum {
@@ -536,6 +537,7 @@ void game_init(game_state_t *state) {
 
     ega_arena_init(&state->asset_arena, &state->asset_mem, GAME_STATE_ASSET_CAP);
     ega_arena_init(&state->scratch_arena, &state->scratch_mem, GAME_STATE_SCRATCH_CAP);
+    entities_arena_init(&state->entities, state->entities_mem, GAME_ENTITY_CAP);
 
     state->width  = EGA_SCREEN_WIDTH;
     state->height = EGA_SCREEN_HEIGHT;

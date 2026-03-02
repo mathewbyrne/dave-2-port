@@ -2,6 +2,7 @@
 #define APP_H
 
 #include "ega.h"
+#include "entities.h"
 
 #include <stdint.h>
 
@@ -15,6 +16,7 @@ enum {
     GAME_TILES_COUNT  = GAME_TILES_WIDTH * GAME_TILES_HEIGHT,
     GAME_LEVEL_MAX_W  = 128,
     GAME_LEVEL_MAX_H  = 128,
+    GAME_ENTITY_CAP   = 164,
 
     // TODO Ok these offsets are going to be brittle, depending on how someone is
     // able to uncompress the executable.  What we do probably know is that they
@@ -62,67 +64,74 @@ typedef enum {
 
 typedef enum {
     LEVEL_TAG_ZOMBIE         = 0x0001,
-    LEVEL_TAG_HUNCH_0x0002   = 0x0002,
-    LEVEL_TAG_UNKNOWN_0x0003 = 0x0003,
+    LEVEL_TAG_HUNCH          = 0x0002,
+    LEVEL_TAG_SLIME          = 0x0003,
     LEVEL_TAG_UNKNOWN_0x0004 = 0x0004,
     LEVEL_TAG_UNKNOWN_0x0005 = 0x0005,
-    LEVEL_TAG_UNKNOWN_0x0006 = 0x0006,
+    LEVEL_TAG_SPIDER         = 0x0006,
     LEVEL_TAG_UNKNOWN_0x0007 = 0x0007,
     LEVEL_TAG_UNKNOWN_0x0009 = 0x0009,
     LEVEL_TAG_UNKNOWN_0x000B = 0x000B,
     LEVEL_TAG_UNKNOWN_0x000C = 0x000C,
     LEVEL_TAG_UNKNOWN_0x000D = 0x000D,
-    LEVEL_TAG_UNKNOWN_0x000E = 0x000E,
-    LEVEL_TAG_UNKNOWN_0x000F = 0x000F,
-    LEVEL_TAG_UNKNOWN_0x0010 = 0x0010,
-    LEVEL_TAG_UNKNOWN_0x0011 = 0x0011,
-    LEVEL_TAG_UNKNOWN_0x0012 = 0x0012,
-    LEVEL_TAG_UNKNOWN_0x0013 = 0x0013,
+    LEVEL_TAG_TREASURE1      = 0x000E,
+    LEVEL_TAG_TREASURE2      = 0x000F,
+    LEVEL_TAG_TREASURE3      = 0x0010,
+    LEVEL_TAG_TREASURE4      = 0x0011,
+    LEVEL_TAG_TREASURE5      = 0x0012,
+    LEVEL_TAG_1UP            = 0x0013,
     LEVEL_TAG_PLAYER         = 0x00FF,
     LEVEL_TAG_UNKNOWN_0x0505 = 0x0505,
     LEVEL_TAG_UNKNOWN_0x0506 = 0x0506,
-    LEVEL_TAG_TELEPORT1      = 0x0633,
+    LEVEL_TAG_TELEPORT_A1    = 0x0633,
     LEVEL_TAG_UNKNOWN_0x072A = 0x072A,
-    LEVEL_TAG_UNKNOWN_0x0A06 = 0x0A06,
+    LEVEL_TAG_TELEPORT_A2    = 0x0A06,
     LEVEL_TAG_UNKNOWN_0x0B15 = 0x0B15,
     LEVEL_TAG_UNKNOWN_0x0D42 = 0x0D42,
-    LEVEL_TAG_UNKNOWN_0x1620 = 0x1620,
+    LEVEL_TAG_TELEPORT_D1    = 0x1620,
     LEVEL_TAG_UNKNOWN_0x1919 = 0x1919,
     LEVEL_TAG_UNKNOWN_0x213E = 0x213E,
     LEVEL_TAG_UNKNOWN_0x2330 = 0x2330,
-    LEVEL_TAG_UNKNOWN_0x240E = 0x240E,
-    LEVEL_TAG_UNKNOWN_0x241C = 0x241C,
+    LEVEL_TAG_TELEPORT_D2    = 0x240E,
+    LEVEL_TAG_TELEPORT_B1    = 0x241C,
     LEVEL_TAG_UNKNOWN_0x2736 = 0x2736,
-    LEVEL_TAG_UNKNOWN_0x2A0C = 0x2A0C,
+    LEVEL_TAG_TELEPORT_C1    = 0x2A0C,
     LEVEL_TAG_UNKNOWN_0x2B36 = 0x2B36,
-    LEVEL_TAG_UNKNOWN_0x3007 = 0x3007,
-    LEVEL_TAG_UNKNOWN_0x301C = 0x301C,
+    LEVEL_TAG_TELEPORT_E1    = 0x3007,
+    LEVEL_TAG_TELEPORT_C2    = 0x301C,
     LEVEL_TAG_UNKNOWN_0x431A = 0x431A,
-    LEVEL_TAG_UNKNOWN_0x4615 = 0x4615,
-    LEVEL_TAG_UNKNOWN_0x461C = 0x461C,
+    LEVEL_TAG_TELEPORT_B2    = 0x4615,
+    LEVEL_TAG_TELEPORT_E2    = 0x461C,
     LEVEL_TAG_UNKNOWN_0x4810 = 0x4810,
     LEVEL_TAG_UNKNOWN_0x492A = 0x492A,
     LEVEL_TAG_UNKNOWN_0x4B3A = 0x4B3A,
     LEVEL_TAG_DOOR_EXIT      = 0x8000,
     LEVEL_TAG_DOOR_TREASURE1 = 0x8001,
-    LEVEL_TAG_UNKNOWN_0x8002 = 0x8002,
-    LEVEL_TAG_UNKNOWN_0x8003 = 0x8003,
-    LEVEL_TAG_UNKNOWN_0x8004 = 0x8004,
-    LEVEL_TAG_UNKNOWN_0x8005 = 0x8005,
+    LEVEL_TAG_DOOR_TREASURE2 = 0x8002,
+    LEVEL_TAG_DOOR_TREASURE3 = 0x8003,
+    LEVEL_TAG_DOOR_TREASURE4 = 0x8004,
+    LEVEL_TAG_DOOR_TREASURE5 = 0x8005,
 } level_tag_t;
 
 typedef struct {
     // memory
-    uint8_t asset_mem[GAME_STATE_ASSET_CAP];
-    uint8_t scratch_mem[GAME_STATE_SCRATCH_CAP];
+    uint8_t  asset_mem[GAME_STATE_ASSET_CAP];
+    uint8_t  scratch_mem[GAME_STATE_SCRATCH_CAP];
+    entity_t entities_mem[GAME_ENTITY_CAP];
 
     ega_arena_t asset_arena;
     ega_arena_t scratch_arena;
+
+    entities_arena_t entities;
 
     ega_buffer_t *buffer;
 
     ega_buffer_t *title_1;
     ega_buffer_t *title_2;
+
+    ega_buffer_t *exec_sprites[EXEC_SPRITE_COUNT];
+    ega_buffer_t *glyphs[256];
+    ega_buffer_t *tiles[GAME_TILES_COUNT];
 
     uint16_t width, height;
 
@@ -137,16 +146,13 @@ typedef struct {
     uint16_t          loading_step;
     uint16_t          loading_step_count;
 
-    ega_buffer_t *exec_sprites[EXEC_SPRITE_COUNT];
-    ega_buffer_t *glyphs[256];
-    ega_buffer_t *tiles[GAME_TILES_COUNT];
-
     uint16_t level_w;
     uint16_t level_h;
     uint16_t level_tiles[GAME_LEVEL_MAX_W][GAME_LEVEL_MAX_H];
     uint16_t level_plane2[GAME_LEVEL_MAX_W][GAME_LEVEL_MAX_H];
     uint16_t level_camera_x;
     uint16_t level_camera_y;
+
 } game_state_t;
 
 void game_init(game_state_t *state);

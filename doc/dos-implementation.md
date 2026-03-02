@@ -2,6 +2,8 @@
 
 This document is intended to store notes on implementation details of the DOS executable `DAVE.EXE`. These observations are mostly gleaned through reverse engineering efforts.
 
+Any references to byte locations in the executable, are based on the decompressed executable. Any references to memory during execution will usually refer to a `DS:_` address, indicating the default data segment set in the program entry point.
+
 ## Data encoding
 
 The main executable is encoded using `LZEXE`, specifically `LZ91` and can be decoded using `UNLZEXE`.
@@ -98,6 +100,10 @@ The game clamps camera coordinates to a bounding box that has a 2 tile boundary 
 
 Entities are implemented as 90 byte wide Fat Structs and stored in a pool, with the first entry always being the player. The player struct is always located at `DS:5360` with all other entities being allocated in a pool immediately after. There is a maximum of 164 entities (the first one being the player entity) that can be allocated at a time.
 
+### Entity states
+
+A nice piece of design is the way entity states are managed. Instead of having large functions dealing with all the states an entity can be in there are a number of predefined states that store sprite ids, behaviour and other metadata.
+
 ### Sprites
 
 After decompression, sprite files `S_*.DD2` have the following structure:
@@ -107,14 +113,18 @@ After decompression, sprite files `S_*.DD2` have the following structure:
 | `0x00` | 2                | `uint16_t` plane/chunk size in bytes (`chunk_size`) |
 | `0x02` | `chunk_size * 5` | 5 equal-sized chunks (planes)                       |
 
-Plane meaning:
-
 - Chunk `0..3`: EGA bitplanes (combined to a 4-bit palette index).
 - Chunk `4`: 1bpp transparency mask plane.
 
 Within each of the 5 planes are packed a series of sprites with various widths and heights. These dimensions are not encoded in the file, and must be known ahead of time. The game ships with this data in the executable.
 
 Each sprite is packed at the same offset within each chunk, therefore all chunks are the same size.
+
+#### Sprite metadata
+
+There are 199 sprite records, each with 4 x 32 byte blocks of data starting at `0x125F0`. It's not entirely clear yet why 4 records per sprite are required, it seems to have something to do with the x phase of a sprite in-game and may be technical in nature. For the purposes of decoding sprite data, the first entry of each sprite record should be used.
+
+A sprite ID is just an integer offset into this data, e.g. sprite 7 would start at position `0x125F0 + (32 * 4) * 7`. Sprites are referenced at runtime, and in their state definitions by this ID.
 
 ### State definitions
 
