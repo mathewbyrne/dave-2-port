@@ -64,7 +64,39 @@ The first 4 bytes are a `uint32_t` indicating the decoded length in bytes. The r
 
 ## Levels
 
+Once decompressed, levels have a `0x20` byte header followed by a number of planes. All levels in this game only have 2 planes. Other planes may be read but are not interpretted by the game.
+
+### File format
+
+| Offset                    | Size           | Meaning                                          |
+| ------------------------- | -------------- | ------------------------------------------------ |
+| `0x00`                    | 2              | `uint16_t` width of map in tiles                 |
+| `0x02`                    | 2              | `uint16_t` height of map in tiles                |
+| `0x04`                    | 2              | `uint16_t` number of planes encoded in file      |
+| `0x0E`                    | 2              | Number of bytes per plane (`plane_stride_bytes`) |
+| `<0x0E`                   | -              | Other header bytes currently not understood      |
+| `0x20`                    | `plane_stride` | First plane data                                 |
+| `0x20 + n * plane_stride` | `plane_stride` | `n` plane data                                   |
+
+#### Plane 0 — Tiles
+
+Starting at `0x0E`, the first plane contains sequential tile indexes, grouped into rows then columns. Tiles start from the top left corner of the level.
+
+#### Plane 1 — Tags
+
+Same layout as the first plane. Each word value represents a tag that is interpretted by the game, generally used to spawn entities.
+
+### Coordinates
+
+The game treats the top left corner of the map as `(0,0)` in world coordinates. World coordinates have a finer resolution than pixel coordinates by a factor of 16. So for example, the position at the top left corner of tile `(4, 6)` would be `(64, 96)` in pixel coordinates, and `(1024, 1536)` in world coordinates.
+
+All positional coordinates are unsigned, however directional vectors can be signed. [^1]
+
+The game clamps camera coordinates to a bounding box that has a 2 tile boundary from each map edge.
+
 ## Entities
+
+Entities are implemented as 90 byte wide Fat Structs and stored in a pool, with the first entry always being the player. The player struct is always located at `DS:5360` with all other entities being allocated in a pool immediately after. There is a maximum of 164 entities (the first one being the player entity) that can be allocated at a time.
 
 ### Sprites
 
@@ -91,3 +123,5 @@ Each sprite is packed at the same offset within each chunk, therefore all chunks
 ## Sound
 
 ## Input
+
+[^1]: Needs further validation
