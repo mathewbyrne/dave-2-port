@@ -24,6 +24,11 @@ enum {
     EXEC_SPRITE_DATA_OFFSET = 0x18970,
     EXEC_SPRITE_DATA_STRIDE = 0x33B0,
     EXEC_SPRITE_COUNT       = 32,
+    EXEC_SPR_DEF_OFFSET     = 0x125F0,
+    EXEC_SPR_DEF_RECORD_SIZE = 0x20,
+    EXEC_SPR_DEF_PHASE_COUNT = 4,
+    EXEC_SPR_DEF_GROUP_COUNT = 199,
+    EXEC_SPR_DEF_RECORD_COUNT = EXEC_SPR_DEF_PHASE_COUNT * EXEC_SPR_DEF_GROUP_COUNT,
 
     // Format of the font storage within the executable:
     //
@@ -114,6 +119,32 @@ typedef enum {
 } level_tag_t;
 
 typedef struct {
+    uint16_t stride_bytes;
+    uint16_t height;
+    uint16_t unknown_0x04;
+    uint16_t unknown_0x06;
+    int16_t  bbox_dx0;
+    int16_t  bbox_dy0;
+    int16_t  bbox_dx1;
+    int16_t  bbox_dy1;
+    char     name[13];
+    int16_t  spawn_dx;
+    int16_t  spawn_dy;
+} exec_sprite_def_record_t;
+
+typedef struct {
+    char                     name[13];
+    exec_sprite_def_record_t phase[EXEC_SPR_DEF_PHASE_COUNT];
+} exec_sprite_def_group_t;
+
+typedef struct {
+    ega_buffer_t *image;
+    ega_buffer_t *mask;
+    uint16_t      w;
+    uint16_t      h;
+} sprite_t;
+
+typedef struct {
     // memory
     uint8_t  asset_mem[GAME_STATE_ASSET_CAP];
     uint8_t  scratch_mem[GAME_STATE_SCRATCH_CAP];
@@ -130,6 +161,8 @@ typedef struct {
     ega_buffer_t *title_2;
 
     ega_buffer_t *exec_sprites[EXEC_SPRITE_COUNT];
+    exec_sprite_def_group_t exec_sprite_defs[EXEC_SPR_DEF_GROUP_COUNT];
+    sprite_t      sprites[EXEC_SPR_DEF_GROUP_COUNT];
     ega_buffer_t *glyphs[256];
     ega_buffer_t *tiles[GAME_TILES_COUNT];
 

@@ -18,8 +18,11 @@ huff_err huff_len(size_t *out, const huff_src src) {
         return err;
     }
 
-    long decoded_len = *(long *)(src.ptr + HUFF_OFFSET_LEN);
-    *out             = (size_t)decoded_len;
+    uint32_t decoded_len = (uint32_t)src.ptr[HUFF_OFFSET_LEN + 0] |
+                           ((uint32_t)src.ptr[HUFF_OFFSET_LEN + 1] << 8) |
+                           ((uint32_t)src.ptr[HUFF_OFFSET_LEN + 2] << 16) |
+                           ((uint32_t)src.ptr[HUFF_OFFSET_LEN + 3] << 24);
+    *out = (size_t)decoded_len;
     return HUFF_OK;
 }
 

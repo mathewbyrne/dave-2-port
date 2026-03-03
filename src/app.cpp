@@ -82,6 +82,14 @@ static int load_file(const char *filename, uint8_t **data, size_t *len) {
     return 0;
 }
 
+static uint16_t read_le_u16(const uint8_t *src) {
+    return (uint16_t)src[0] | ((uint16_t)src[1] << 8);
+}
+
+static int16_t read_le_i16(const uint8_t *src) {
+    return (int16_t)read_le_u16(src);
+}
+
 static void decode_title(const char *filename, ega_buffer_t *dst) {
     uint8_t *data = 0;
     size_t   len  = 0;
@@ -118,6 +126,74 @@ static void load_tiles(game_state_t *state) {
     }
 
     free(data);
+}
+
+typedef struct {
+    const char *filename;
+    uint16_t    first_sprite_id;
+    uint16_t    sprite_count;
+} sprite_file_info_t;
+
+static const sprite_file_info_t g_sprite_files[] = {
+    {"dos/S_DAVE.DD2", 0x00, 85},  {"dos/S_CHUNK1.DD2", 0x55, 36}, {"dos/S_CHUNK2.DD2", 0x79, 53},
+    {"dos/S_FRANK.DD2", 0xAE, 13}, {"dos/S_MASTER.DD2", 0xBB, 12},
+};
+
+static_assert((85 + 36 + 53 + 13 + 12) == EXEC_SPR_DEF_GROUP_COUNT);
+
+static void load_sprites(game_state_t *state) {
+    for (size_t f = 0; f < (sizeof(g_sprite_files) / sizeof(g_sprite_files[0])); f++) {
+        const sprite_file_info_t *file_info = &g_sprite_files[f];
+
+        uint8_t *encode_data = 0;
+        size_t   encode_len  = 0;
+        assert(load_file(file_info->filename, &encode_data, &encode_len) == 0);
+
+        huff_src src = {encode_data, encode_len};
+        size_t   decode_len;
+        assert(huff_len(&decode_len, src) == HUFF_OK);
+
+        uint8_t *decode_data = (uint8_t *)malloc(decode_len);
+        assert(decode_data != 0);
+        assert(huff_decode(decode_data, decode_len, src) == HUFF_OK);
+        free(encode_data);
+
+        uint16_t chunk_size = read_le_u16(decode_data + 0x00);
+        assert((size_t)chunk_size * 5 + 2 <= decode_len);
+
+        const uint8_t *plane_data = decode_data + 0x02;
+        const uint8_t *mask_data  = decode_data + 0x02 + ((size_t)chunk_size * 4);
+
+        for (int i = 0; i < file_info->sprite_count; i++) {
+            uint16_t sprite_id = (uint16_t)(file_info->first_sprite_id + i);
+            assert(sprite_id < EXEC_SPR_DEF_GROUP_COUNT);
+
+            const exec_sprite_def_record_t *def = &state->exec_sprite_defs[sprite_id].phase[0];
+            if (def->stride_bytes == 0 || def->height == 0) {
+                continue;
+            }
+
+            uint16_t w = (uint16_t)(def->stride_bytes * 8);
+            uint16_t h = def->height;
+
+            size_t sprite_len = (size_t)def->stride_bytes * (size_t)def->height;
+            size_t sprite_off = (size_t)def->unknown_0x06 * 16 + (size_t)def->unknown_0x04;
+            assert(sprite_len <= chunk_size);
+            assert((sprite_off + sprite_len) <= chunk_size);
+
+            state->sprites[sprite_id].image = ega_buffer_alloc(&state->asset_arena, w, h);
+            state->sprites[sprite_id].mask  = ega_buffer_alloc(&state->asset_arena, w, h);
+            state->sprites[sprite_id].w     = w;
+            state->sprites[sprite_id].h     = h;
+
+            uint16_t plane_offset = (uint16_t)(chunk_size - sprite_len);
+            ega_decode_4_plane(state->sprites[sprite_id].image->data, plane_data + sprite_off,
+                               (uint16_t)sprite_len, plane_offset);
+            ega_decode_1bpp(state->sprites[sprite_id].mask->data, mask_data + sprite_off, w, h);
+        }
+
+        free(decode_data);
+    }
 }
 
 static void load_level(game_state_t *state, const char *filename) {
@@ -199,6 +275,40 @@ static void load_executable_assets(game_state_t *state) {
     size_t   len  = 0;
 
     assert(load_file("dos/DAVE.EXE", &data, &len) == 0);
+
+    const size_t sprite_def_data_end =
+        (size_t)EXEC_SPR_DEF_OFFSET +
+        ((size_t)EXEC_SPR_DEF_RECORD_COUNT * EXEC_SPR_DEF_RECORD_SIZE);
+    assert(sprite_def_data_end <= len);
+
+    for (int group_i = 0; group_i < EXEC_SPR_DEF_GROUP_COUNT; group_i++) {
+        exec_sprite_def_group_t *group = &state->exec_sprite_defs[group_i];
+
+        for (int phase_i = 0; phase_i < EXEC_SPR_DEF_PHASE_COUNT; phase_i++) {
+            size_t record_i   = (size_t)group_i * EXEC_SPR_DEF_PHASE_COUNT + (size_t)phase_i;
+            size_t record_off = (size_t)EXEC_SPR_DEF_OFFSET + record_i * EXEC_SPR_DEF_RECORD_SIZE;
+
+            exec_sprite_def_record_t *record = &group->phase[phase_i];
+            record->stride_bytes             = read_le_u16(data + record_off + 0x00);
+            record->height                   = read_le_u16(data + record_off + 0x02);
+            record->unknown_0x04             = read_le_u16(data + record_off + 0x04);
+            record->unknown_0x06             = read_le_u16(data + record_off + 0x06);
+            record->bbox_dx0                 = read_le_i16(data + record_off + 0x08);
+            record->bbox_dy0                 = read_le_i16(data + record_off + 0x0A);
+            record->bbox_dx1                 = read_le_i16(data + record_off + 0x0C);
+            record->bbox_dy1                 = read_le_i16(data + record_off + 0x0E);
+            memcpy(record->name, data + record_off + 0x10, 12);
+            record->name[12] = 0;
+            record->spawn_dx = read_le_i16(data + record_off + 0x1C);
+            record->spawn_dy = read_le_i16(data + record_off + 0x1E);
+
+            if (phase_i == 0) {
+                memcpy(group->name, record->name, sizeof(group->name));
+            } else {
+                assert(memcmp(group->name, record->name, 12) == 0);
+            }
+        }
+    }
 
     const size_t sprite_plane_span = (size_t)EXEC_SPRITE_DATA_STRIDE;
     const size_t sprite_data_end =
@@ -301,56 +411,6 @@ static void fill_rect(ega_buffer_t *dst, int x, int y, int w, int h, uint8_t col
     }
 }
 
-static void draw_hex_digit_7x7(ega_buffer_t *dst, uint8_t value, int x, int y, uint8_t color) {
-    static const uint8_t g_hex_font_7x7[16][7] = {
-        {0x3e, 0x63, 0x73, 0x7b, 0x6f, 0x63, 0x3e}, // 0
-        {0x0c, 0x1c, 0x0c, 0x0c, 0x0c, 0x0c, 0x1e}, // 1
-        {0x3e, 0x63, 0x03, 0x0e, 0x38, 0x60, 0x7f}, // 2
-        {0x3e, 0x63, 0x03, 0x1e, 0x03, 0x63, 0x3e}, // 3
-        {0x06, 0x0e, 0x1e, 0x36, 0x7f, 0x06, 0x06}, // 4
-        {0x7f, 0x60, 0x7e, 0x03, 0x03, 0x63, 0x3e}, // 5
-        {0x1e, 0x30, 0x60, 0x7e, 0x63, 0x63, 0x3e}, // 6
-        {0x7f, 0x63, 0x03, 0x06, 0x0c, 0x18, 0x18}, // 7
-        {0x3e, 0x63, 0x63, 0x3e, 0x63, 0x63, 0x3e}, // 8
-        {0x3e, 0x63, 0x63, 0x3f, 0x03, 0x06, 0x3c}, // 9
-        {0x1c, 0x36, 0x63, 0x7f, 0x63, 0x63, 0x63}, // A
-        {0x7e, 0x63, 0x63, 0x7e, 0x63, 0x63, 0x7e}, // B
-        {0x3e, 0x63, 0x60, 0x60, 0x60, 0x63, 0x3e}, // C
-        {0x7c, 0x66, 0x63, 0x63, 0x63, 0x66, 0x7c}, // D
-        {0x7f, 0x60, 0x60, 0x7e, 0x60, 0x60, 0x7f}, // E
-        {0x7f, 0x60, 0x60, 0x7e, 0x60, 0x60, 0x60}, // F
-    };
-
-    if (value > 0x0f) {
-        return;
-    }
-
-    for (int row = 0; row < 7; row++) {
-        int py = y + row;
-        if (py < 0 || py >= dst->h) {
-            continue;
-        }
-
-        uint8_t bits = g_hex_font_7x7[value][row];
-        for (int col = 0; col < 7; col++) {
-            int px = x + col;
-            if (px < 0 || px >= dst->w) {
-                continue;
-            }
-            if (bits & (1u << (6 - col))) {
-                dst->data[(size_t)py * dst->stride + (size_t)px] = color;
-            }
-        }
-    }
-}
-
-static void draw_plane2_hex_2x2(ega_buffer_t *dst, uint16_t value, int x, int y, uint8_t color) {
-    draw_hex_digit_7x7(dst, (uint8_t)((value >> 12) & 0x0f), x + 1, y + 1, color);
-    draw_hex_digit_7x7(dst, (uint8_t)((value >> 8) & 0x0f), x + 8, y + 1, color);
-    draw_hex_digit_7x7(dst, (uint8_t)((value >> 4) & 0x0f), x + 1, y + 8, color);
-    draw_hex_digit_7x7(dst, (uint8_t)(value & 0x0f), x + 8, y + 8, color);
-}
-
 static void render_title_scroll(game_state_t *state) {
     int scroll_px = (int)state->screen_offset_x;
 
@@ -392,24 +452,6 @@ static void render_level(game_state_t *state) {
             if (tile_idx < GAME_TILES_COUNT && state->tiles[tile_idx]) {
                 ega_buffer_blit(state->buffer, state->tiles[tile_idx], draw_x, draw_y, 0, 0,
                                 TILE_WIDTH, TILE_HEIGHT);
-            }
-        }
-    }
-
-    for (int ty = 0; ty < tiles_y; ty++) {
-        for (int tx = 0; tx < tiles_x; tx++) {
-            int map_x = first_tile_x + tx;
-            int map_y = first_tile_y + ty;
-            if (map_x < 0 || map_y < 0 || map_x >= state->level_w || map_y >= state->level_h) {
-                continue;
-            }
-
-            int      draw_x       = offset_x + tx * TILE_WIDTH;
-            int      draw_y       = offset_y + ty * TILE_HEIGHT;
-            uint16_t plane2_value = state->level_plane2[map_x][map_y];
-            if (plane2_value != 0) {
-                fill_rect(state->buffer, draw_x, draw_y, TILE_WIDTH, TILE_HEIGHT, 0x0f);
-                draw_plane2_hex_2x2(state->buffer, plane2_value, draw_x, draw_y, 0x00);
             }
         }
     }
@@ -495,6 +537,7 @@ static void update_scene(game_state_t *state) {
             state->loading_step++;
         } else if (state->loading_step == 1) {
             load_executable_assets(state);
+            load_sprites(state);
             load_tiles(state);
             load_level(state, "dos/LEVEL01.DD2");
             state->loading_step++;
