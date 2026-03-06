@@ -4,6 +4,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "app.cpp"
 
@@ -188,6 +189,17 @@ static float macos_dt_seconds(uint64_t start, uint64_t end, mach_timebase_info_d
     return (float)(nanos / 1000000000.0);
 }
 
+static void macos_sleep_seconds(double seconds) {
+    if (seconds <= 0.0) {
+        return;
+    }
+
+    struct timespec req = {0, 0};
+    req.tv_sec          = (time_t)seconds;
+    req.tv_nsec         = (long)((seconds - (double)req.tv_sec) * 1000000000.0);
+    nanosleep(&req, 0);
+}
+
 int main(int argc, const char **argv) {
     (void)argc;
     (void)argv;
@@ -220,6 +232,7 @@ int main(int argc, const char **argv) {
         mach_timebase_info_data_t timebase = {0};
         mach_timebase_info(&timebase);
         uint64_t last_counter = mach_absolute_time();
+        const double target_frame_seconds = 1.0 / 70.0;
 
         while (g_running) {
             @autoreleasepool {
@@ -260,6 +273,11 @@ int main(int argc, const char **argv) {
                 [view setNeedsDisplay:YES];
                 [view displayIfNeeded];
                 [NSApp updateWindows];
+
+                uint64_t frame_end   = mach_absolute_time();
+                double   frame_time  = (double)macos_dt_seconds(counter_now, frame_end, timebase);
+                double   sleep_time  = target_frame_seconds - frame_time;
+                macos_sleep_seconds(sleep_time);
             }
         }
 

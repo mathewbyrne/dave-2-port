@@ -139,6 +139,7 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line
     LARGE_INTEGER last_counter;
     QueryPerformanceFrequency(&frequency);
     QueryPerformanceCounter(&last_counter);
+    const double target_frame_seconds = 1.0 / 70.0;
 
     game_init(&game_state);
 
@@ -175,6 +176,18 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line
         HDC device_context = GetDC(window);
         win32_present_backbuffer(&g_backbuffer, device_context, window_width, window_height);
         ReleaseDC(window, device_context);
+
+        LARGE_INTEGER frame_end;
+        QueryPerformanceCounter(&frame_end);
+        double frame_time =
+            (double)(frame_end.QuadPart - current_counter.QuadPart) / (double)frequency.QuadPart;
+        double sleep_time = target_frame_seconds - frame_time;
+        if (sleep_time > 0.0) {
+            DWORD sleep_ms = (DWORD)(sleep_time * 1000.0);
+            if (sleep_ms > 0) {
+                Sleep(sleep_ms);
+            }
+        }
     }
 
     return 0;
