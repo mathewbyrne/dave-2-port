@@ -128,6 +128,6 @@ void ega_render_buffer(uint32_t *dst, const uint8_t *src, const int w, const int
  * ega_decode_1_plane is the same but for a single bitplane, primarily used for transparency masks.
  */
 void ega_decode_4_plane(uint8_t *dst, const uint8_t *src, uint16_t len, uint16_t offset);
-void ega_decode_1_plane(uint8_t *dst, const uint8_t *src, uint16_t len);
+void ega_decode_1bpp(uint8_t *dst, const uint8_t *src, uint16_t w, uint16_t h);
 
 #endif

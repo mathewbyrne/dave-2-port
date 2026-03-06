@@ -4,8 +4,8 @@
 
 #include "types.h"
 
+#include "asset.cpp"
 #include "ega.cpp"
-#include "decode.cpp"
 
 #ifndef _MSC_VER
 static int fopen_s(FILE **fp, const char *filename, const char *mode) {
