@@ -1,9 +1,9 @@
-#include "entities.h"
+#include "entity.h"
 
 #include <assert.h>
 #include <string.h>
 
-void entities_arena_init(entities_arena_t *arena, void *storage, uint16_t cap) {
+void entity_arena_init(entity_arena_t *arena, void *storage, uint16_t cap) {
     assert(arena);
     assert(storage || cap == 0);
 
@@ -17,7 +17,7 @@ void entities_arena_init(entities_arena_t *arena, void *storage, uint16_t cap) {
     }
 }
 
-void entities_arena_clear(entities_arena_t *arena) {
+void entity_arena_clear(entity_arena_t *arena) {
     assert(arena);
     if (!arena->items || arena->cap == 0) {
         arena->count          = 0;
@@ -30,7 +30,7 @@ void entities_arena_clear(entities_arena_t *arena) {
     arena->next_free_hint = 0;
 }
 
-entity_t *entities_alloc(entities_arena_t *arena, uint16_t type) {
+entity_t *entity_alloc(entity_arena_t *arena, entity_type_t type) {
     assert(arena);
     assert(type != 0);
 
@@ -61,7 +61,7 @@ entity_t *entities_alloc(entities_arena_t *arena, uint16_t type) {
     return 0;
 }
 
-void entities_destroy(entities_arena_t *arena, entity_t *entity) {
+void entity_destroy(entity_arena_t *arena, entity_t *entity) {
     assert(arena);
     assert(entity);
     assert(arena->items);
@@ -75,14 +75,14 @@ void entities_destroy(entities_arena_t *arena, entity_t *entity) {
     }
 
     entity->active = 0;
-    entity->type   = 0;
+    entity->type   = ENTITY_TYPE_FREE;
 }
 
-size_t entities_arena_data_bytes(const entities_arena_t *arena) {
+size_t entity_arena_data_bytes(const entity_arena_t *arena) {
     assert(arena);
     return sizeof(entity_t) * (size_t)arena->cap;
 }
 
-size_t entities_storage_bytes(uint16_t cap) {
+size_t entity_storage_bytes(uint16_t cap) {
     return sizeof(entity_t) * (size_t)cap;
 }

@@ -6,8 +6,10 @@
 
 #include "asset.cpp"
 #include "ega.cpp"
-#include "entities.cpp"
+#include "entity.cpp"
 #include "types.h"
+
+#define WORLD_TO_SCREEN(w, cam) (((w) - (cam)) / 16)
 
 enum {
     TILE_WIDTH  = 16,
@@ -23,7 +25,7 @@ enum {
     TICK_RATE               = 70,
     FADE_TICK               = 9,
     MENU_OPENING_TICK_COUNT = 8,
-    LEVEL_SCROLL_STEP       = 4,
+    LEVEL_SCROLL_STEP       = 64,
 };
 
 static const uint8_t g_fade_in_map16[4][16] = {
@@ -156,9 +158,33 @@ static void render_title_scroll(game_state_t *state) {
                     0, EGA_SCREEN_WIDTH, EGA_SCREEN_HEIGHT);
 }
 
+static void camera_reset(game_state_t *state) {
+    uint16_t camera_x = state->player->x - 0xa00;
+    uint16_t camera_y = state->player->y - 0x700;
+
+    if ((camera_x < state->level_min_camera_x) || (state->player->x < 0xa00)) {
+        camera_x = state->level_min_camera_x;
+    }
+    if ((camera_y < state->level_min_camera_y) || (state->player->y < 0x700)) {
+        camera_y = state->level_min_camera_y;
+    }
+    if (state->level_max_camera_x < camera_x) {
+        camera_x = state->level_max_camera_x;
+    }
+    if (state->level_max_camera_y < camera_y) {
+        camera_y = state->level_max_camera_y;
+    }
+
+    state->level_camera_x = camera_x;
+    state->level_camera_y = camera_y;
+    // TODO: for when we need screen tile offsets cached
+    // g_screen_offset_tile_x = screen_offset_x >> 8 & 0xfe;
+    // g_screen_offset_tile_y = screen_offset_y >> 8 & 0xfe;
+}
+
 static void render_level(game_state_t *state) {
-    int cam_x = (int)state->level_camera_x;
-    int cam_y = (int)state->level_camera_y;
+    int cam_x = (int)state->level_camera_x >> 4;
+    int cam_y = (int)state->level_camera_y >> 4;
 
     fill_rect(state->buffer, 0, 0, EGA_SCREEN_WIDTH, EGA_SCREEN_HEIGHT, 0);
 
@@ -187,6 +213,14 @@ static void render_level(game_state_t *state) {
             }
         }
     }
+
+    // for (int i = 0; i < state->entity_arena.count; i++) {
+    // }
+    ega_buffer_blit_masked(state->buffer, state->assets.sprites[1].image,
+                           state->assets.sprites[1].mask,
+                           WORLD_TO_SCREEN(state->player->x, state->level_camera_x),
+                           WORLD_TO_SCREEN(state->player->y, state->level_camera_y), 0, 0,
+                           state->assets.sprites[1].w, state->assets.sprites[1].h);
 }
 
 static void render_menu_overlay(game_state_t *state) {
@@ -213,14 +247,45 @@ static void render_menu_overlay(game_state_t *state) {
     //
 }
 
+static void level_load(game_state_t *state) {
+    state->level_min_camera_x = 0x200;
+    state->level_min_camera_y = 0x200;
+    state->level_max_camera_x = (state->level.w + -0x16) * 0x100;
+    state->level_max_camera_y = (state->level.h + -0xf) * 0x100;
+
+    for (int tile_y = 0; tile_y < state->level.h; tile_y++) {
+        for (int tile_x = 0; tile_x < state->level.w; tile_x++) {
+            switch (state->level.tags[tile_x][tile_y]) {
+            case LEVEL_TAG_PLAYER:
+                state->player->dir    = 1;
+                state->player->active = 1;
+                state->player->x      = tile_x << 8;
+                state->player->y      = tile_y * 0x100 + 0xf;
+                // entity_set_state(state->player, player_state_standing)
+            }
+        }
+    }
+}
+
 static void set_scene(game_state_t *state, game_scene_t scene) {
     state->scene            = scene;
     state->tick_accumulator = 0.0f;
     state->tick             = 0;
-    state->t                = 0;
     state->screen_offset_x  = 0;
-    state->level_camera_x   = 0;
-    state->level_camera_y   = 0;
+
+    switch (scene) {
+    case GAME_SCENE_LEVEL:
+        state->level_current++;
+        state->player_score = 0;
+        state->player_lives = 4;
+        state->player_ammo  = 8;
+
+        state->player = entity_alloc(&state->entity_arena, ENTITY_TYPE_PLAYER);
+
+        level_load(state);
+
+        camera_reset(state);
+    }
 }
 
 static int clampi(int v, int lo, int hi) {
@@ -265,15 +330,6 @@ static game_direction_t input_direction_from_keys(const game_direction_state_t *
 }
 
 static void update_level(game_state_t *state, const game_input_t *input) {
-    int max_camera_x = state->level.w * TILE_WIDTH - EGA_SCREEN_WIDTH;
-    int max_camera_y = state->level.h * TILE_HEIGHT - EGA_SCREEN_HEIGHT;
-    if (max_camera_x < 0) {
-        max_camera_x = 0;
-    }
-    if (max_camera_y < 0) {
-        max_camera_y = 0;
-    }
-
     int cam_x = (int)state->level_camera_x;
     int cam_y = (int)state->level_camera_y;
     if (input->direction == GAME_DIRECTION_W || input->direction == GAME_DIRECTION_NW ||
@@ -293,27 +349,29 @@ static void update_level(game_state_t *state, const game_input_t *input) {
         cam_y += LEVEL_SCROLL_STEP;
     }
 
-    state->level_camera_x = (uint16_t)clampi(cam_x, 0, max_camera_x);
-    state->level_camera_y = (uint16_t)clampi(cam_y, 0, max_camera_y);
+    state->level_camera_x =
+        (uint16_t)clampi(cam_x, state->level_min_camera_x, state->level_max_camera_x);
+    state->level_camera_y =
+        (uint16_t)clampi(cam_y, state->level_min_camera_y, state->level_max_camera_y);
 }
 
 static void update_scene(game_state_t *state) {
     if (state->scene == GAME_SCENE_TITLE) {
         if (state->tick >= FADE_TICK * 6) {
-            if (state->t > TITLE_SCROLL_RIGHT_BEGIN && state->t <= TITLE_SCROLL_RIGHT_END) {
+            if (state->tick > TITLE_SCROLL_RIGHT_BEGIN && state->tick <= TITLE_SCROLL_RIGHT_END) {
                 state->screen_offset_x += TITLE_SCROLL_STEP;
             }
 
-            if (state->t > TITLE_SCROLL_LEFT_BEGIN && state->t <= TITLE_SCROLL_LEFT_END) {
+            if (state->tick > TITLE_SCROLL_LEFT_BEGIN && state->tick <= TITLE_SCROLL_LEFT_END) {
                 state->screen_offset_x -= TITLE_SCROLL_STEP;
             }
 
-            if (state->t > TITLE_T_MAX) {
-                state->t = 0;
+            if (state->tick > TITLE_T_MAX) {
+                state->tick = 0;
             }
         }
 
-        state->t += 1;
+        state->tick += 1;
     }
 }
 
@@ -331,7 +389,7 @@ void game_init(game_state_t *state) {
 
     ega_arena_init(&state->asset_arena, &state->asset_mem, GAME_STATE_ASSET_CAP);
     ega_arena_init(&state->scratch_arena, &state->scratch_mem, GAME_STATE_SCRATCH_CAP);
-    entities_arena_init(&state->entities, state->entities_mem, GAME_ENTITY_CAP);
+    entity_arena_init(&state->entity_arena, state->entity_mem, GAME_ENTITY_CAP);
 
     state->width  = EGA_SCREEN_WIDTH;
     state->height = EGA_SCREEN_HEIGHT;
@@ -354,8 +412,8 @@ void game_tick(game_state_t *state, const game_input_t *input, float dt_seconds,
         state->tick_accumulator -= (1.0f / (float)TICK_RATE);
 
         if (state->scene == GAME_SCENE_TITLE &&
-            (tick_input.direction != GAME_DIRECTION_NONE || tick_input.action_1.pressed_this_frame ||
-             tick_input.action_2.pressed_this_frame)) {
+            (tick_input.direction != GAME_DIRECTION_NONE ||
+             tick_input.action_1.pressed_this_frame || tick_input.action_2.pressed_this_frame)) {
             set_scene(state, GAME_SCENE_LEVEL);
         }
 

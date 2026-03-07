@@ -3,7 +3,7 @@
 
 #include "asset.h"
 #include "ega.h"
-#include "entities.h"
+#include "entity.h"
 
 #include <stdint.h>
 
@@ -68,19 +68,17 @@ typedef struct {
     // memory
     uint8_t  asset_mem[GAME_STATE_ASSET_CAP];
     uint8_t  scratch_mem[GAME_STATE_SCRATCH_CAP];
-    entity_t entities_mem[GAME_ENTITY_CAP];
+    entity_t entity_mem[GAME_ENTITY_CAP];
 
-    ega_arena_t asset_arena;
-    ega_arena_t scratch_arena;
-
-    entities_arena_t entities;
+    ega_arena_t    asset_arena;
+    ega_arena_t    scratch_arena;
+    entity_arena_t entity_arena;
 
     ega_buffer_t *buffer;
 
     uint16_t width, height;
 
     uint16_t screen_offset_x;
-    uint16_t t;
     float    tick_accumulator;
     uint32_t tick;
 
@@ -91,8 +89,20 @@ typedef struct {
     asset_shared_t assets;
     asset_level_t  level;
 
+    uint16_t level_current;
+    // All x/y values are in world units unless otherwise specified.
     uint16_t level_camera_x;
     uint16_t level_camera_y;
+    uint16_t level_min_camera_x;
+    uint16_t level_min_camera_y;
+    uint16_t level_max_camera_x;
+    uint16_t level_max_camera_y;
+
+    uint32_t player_score;
+    uint8_t  player_lives;
+    uint8_t  player_ammo;
+
+    entity_t *player;
 
 } game_state_t;
 
