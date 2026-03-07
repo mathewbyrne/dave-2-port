@@ -118,16 +118,28 @@ static void draw_string_center(game_state_t *state, char *str, int y) {
 }
 
 static void fill_rect(ega_buffer_t *dst, int x, int y, int w, int h, uint8_t color) {
+    if (w <= 0 || h <= 0) {
+        return;
+    }
+
     int x0 = x < 0 ? 0 : x;
     int y0 = y < 0 ? 0 : y;
     int x1 = x + w;
     int y1 = y + h;
+
+    if (x1 <= 0 || y1 <= 0 || x0 >= dst->w || y0 >= dst->h) {
+        return;
+    }
 
     if (x1 > dst->w) {
         x1 = dst->w;
     }
     if (y1 > dst->h) {
         y1 = dst->h;
+    }
+
+    if (x0 >= x1 || y0 >= y1) {
+        return;
     }
 
     for (int yy = y0; yy < y1; yy++) {

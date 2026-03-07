@@ -111,10 +111,10 @@ typedef struct {
 typedef struct {
     uint16_t      id;
     ega_buffer_t *gfx;
-    bool          solid_n;
-    bool          solid_e;
-    bool          solid_w;
-    bool          solid_s;
+    bool          solid_floor;
+    bool          solid_ceil;
+    bool          solid_left;
+    bool          solid_right;
 } tile_t;
 
 enum {

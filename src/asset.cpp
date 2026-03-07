@@ -1,8 +1,8 @@
 #include "asset.h"
 
 #include <assert.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static uint16_t read_le_u16(const uint8_t *src) {
@@ -286,8 +286,8 @@ typedef struct {
 } asset_raw_t;
 
 typedef struct {
-    uint16_t    first_sprite_id;
-    uint16_t    sprite_count;
+    uint16_t first_sprite_id;
+    uint16_t sprite_count;
 } sprite_file_info_t;
 
 static const sprite_file_info_t g_sprite_files[] = {
@@ -325,10 +325,21 @@ int decode_tiles(asset_shared_t *shared, const asset_raw_t raw, ega_arena_t *a) 
     uint16_t stride = ASSET_TILE_WIDTH * ASSET_TILE_HEIGHT / 8;
     assert(raw.tiles.len == stride * 4 * ASSET_TILES_COUNT);
 
+    // each tile metadata table is a series of bytes
+    uint8_t *floor_tbl = raw.exec.data + EXEC_TILE_DATA_OFFSET + ASSET_TILES_COUNT * 0;
+    uint8_t *ceil_tbl  = raw.exec.data + EXEC_TILE_DATA_OFFSET + ASSET_TILES_COUNT * 1;
+    uint8_t *left_tbl  = raw.exec.data + EXEC_TILE_DATA_OFFSET + ASSET_TILES_COUNT * 2;
+    uint8_t *right_tbl = raw.exec.data + EXEC_TILE_DATA_OFFSET + ASSET_TILES_COUNT * 3;
+
     for (uint16_t i = 0; (i + 1) * stride * 4 < raw.tiles.len; i += 1) {
         shared->tiles[i].id  = i;
         shared->tiles[i].gfx = ega_buffer_alloc(a, ASSET_TILE_WIDTH, ASSET_TILE_HEIGHT);
         ega_decode_4_plane(shared->tiles[i].gfx->data, raw.tiles.data + i * stride * 4, stride, 0);
+
+        shared->tiles[i].solid_floor = floor_tbl[i];
+        shared->tiles[i].solid_ceil  = ceil_tbl[i];
+        shared->tiles[i].solid_left  = left_tbl[i];
+        shared->tiles[i].solid_right = right_tbl[i];
     }
 
     return 0;
@@ -431,7 +442,7 @@ int decode_sprites(asset_shared_t *shared, const asset_raw_t raw, ega_arena_t *a
     }
 
     for (size_t f = 0; f < (sizeof(g_sprite_files) / sizeof(g_sprite_files[0])); f++) {
-        const sprite_file_info_t *file_info = &g_sprite_files[f];
+        const sprite_file_info_t *file_info   = &g_sprite_files[f];
         const file_t             *sprite_file = &raw.sprites[f];
 
         assert(sprite_file->len >= 2);
@@ -443,9 +454,9 @@ int decode_sprites(asset_shared_t *shared, const asset_raw_t raw, ega_arena_t *a
         const uint8_t *mask_data  = sprite_file->data + 0x02 + ((size_t)chunk_size * 4);
 
         for (uint16_t i = 0; i < file_info->sprite_count; i++) {
-            uint16_t sprite_id = (uint16_t)(file_info->first_sprite_id + i);
-            const spr_def *def = &spr_defs[sprite_id].phase[0];
-            sprite_t      *dst = &shared->sprites[sprite_id];
+            uint16_t       sprite_id = (uint16_t)(file_info->first_sprite_id + i);
+            const spr_def *def       = &spr_defs[sprite_id].phase[0];
+            sprite_t      *dst       = &shared->sprites[sprite_id];
 
             assert(sprite_id < ASSET_SPRITE_COUNT);
 
@@ -458,8 +469,8 @@ int decode_sprites(asset_shared_t *shared, const asset_raw_t raw, ega_arena_t *a
             uint16_t w = (uint16_t)(def->stride_bytes * 8);
             uint16_t h = def->height;
 
-            size_t sprite_len = (size_t)def->stride_bytes * (size_t)def->height;
-            size_t sprite_off = ((size_t)def->unknown_0x06 * 16) + (size_t)def->unknown_0x04;
+            size_t   sprite_len   = (size_t)def->stride_bytes * (size_t)def->height;
+            size_t   sprite_off   = ((size_t)def->unknown_0x06 * 16) + (size_t)def->unknown_0x04;
             uint16_t plane_offset = (uint16_t)(chunk_size - sprite_len);
 
             assert(sprite_len <= chunk_size);
@@ -509,7 +520,7 @@ int decode_ui_sprites(asset_shared_t *shared, const asset_raw_t raw, ega_arena_t
 void asset_load_shared(asset_shared_t *shared, const char *basepath, ega_arena_t *a) {
     asset_raw_t data = {};
 
-    assert(load_file_decode("DAVE.EXE", basepath, ENCODING_NONE, &data.exec) == 0);
+    assert(load_file_decode("DAVE.EXE", basepath, ENCODING_LZ, &data.exec) == 0);
     assert(load_file_decode("EGATILES.DD2", basepath, ENCODING_NONE, &data.tiles) == 0);
     assert(load_file_decode("S_DAVE.DD2", basepath, ENCODING_HUFF, &data.sprites[0]) == 0);
     assert(load_file_decode("S_CHUNK1.DD2", basepath, ENCODING_HUFF, &data.sprites[1]) == 0);
