@@ -15,12 +15,42 @@ enum {
 };
 
 typedef struct {
-    uint8_t toggle_pause;
-    uint8_t next_scene;
     uint8_t move_left;
     uint8_t move_right;
     uint8_t move_up;
     uint8_t move_down;
+} game_direction_state_t;
+
+typedef enum {
+    GAME_DIRECTION_NONE = 0,
+    GAME_DIRECTION_N,
+    GAME_DIRECTION_NE,
+    GAME_DIRECTION_E,
+    GAME_DIRECTION_SE,
+    GAME_DIRECTION_S,
+    GAME_DIRECTION_SW,
+    GAME_DIRECTION_W,
+    GAME_DIRECTION_NW,
+} game_direction_t;
+
+typedef struct {
+    uint8_t is_down;
+    uint8_t pressed_this_frame;
+} game_button_t;
+
+typedef struct {
+    game_direction_state_t direction_keys;
+    game_direction_t       direction;
+
+    game_button_t action_1;
+    game_button_t action_2;
+
+    uint8_t menu_help;
+    uint8_t menu_sound_toggle;
+    uint8_t menu_keyboard_config;
+    uint8_t menu_reset_game;
+    uint8_t menu_quit_game;
+    uint8_t menu_status;
 } game_input_t;
 
 typedef enum {
@@ -33,25 +63,6 @@ typedef enum {
     GAME_MENU_OPENING,
     GAME_MENU_OPEN,
 } game_menu_state_t;
-
-// typedef struct {
-//     uint16_t stride_bytes;
-//     uint16_t height;
-//     uint16_t unknown_0x04;
-//     uint16_t unknown_0x06;
-//     int16_t  bbox_dx0;
-//     int16_t  bbox_dy0;
-//     int16_t  bbox_dx1;
-//     int16_t  bbox_dy1;
-//     char     name[13];
-//     int16_t  spawn_dx;
-//     int16_t  spawn_dy;
-// } exec_sprite_def_record_t;
-
-// typedef struct {
-//     char                     name[13];
-//     exec_sprite_def_record_t phase[EXEC_SPR_DEF_PHASE_COUNT];
-// } exec_sprite_def_group_t;
 
 typedef struct {
     // memory

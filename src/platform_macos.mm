@@ -1,4 +1,5 @@
 #import <Cocoa/Cocoa.h>
+#import <Carbon/Carbon.h>
 #import <CoreGraphics/CoreGraphics.h>
 #include <mach/mach_time.h>
 
@@ -43,6 +44,17 @@ static void macos_resize_backbuffer(macos_backbuffer_t *buffer, int width, int h
 
 @implementation DaveView
 
+- (void)setButton:(game_button_t *)button isDown:(BOOL)isDown {
+    if (!button) {
+        return;
+    }
+
+    if (isDown && !button->is_down) {
+        button->pressed_this_frame = 1;
+    }
+    button->is_down = isDown ? 1 : 0;
+}
+
 - (BOOL)handleAppQuitShortcut:(NSEvent *)event {
     NSEventModifierFlags mods = [event modifierFlags] & NSEventModifierFlagDeviceIndependentFlagsMask;
     if ((mods & NSEventModifierFlagCommand) == 0) {
@@ -64,13 +76,32 @@ static void macos_resize_backbuffer(macos_backbuffer_t *buffer, int width, int h
 
 - (void)updateMovementKey:(unichar)c isDown:(BOOL)isDown {
     if (c == NSLeftArrowFunctionKey) {
-        game_input.move_left = isDown ? 1 : 0;
+        game_input.direction_keys.move_left = isDown ? 1 : 0;
     } else if (c == NSRightArrowFunctionKey) {
-        game_input.move_right = isDown ? 1 : 0;
+        game_input.direction_keys.move_right = isDown ? 1 : 0;
     } else if (c == NSUpArrowFunctionKey) {
-        game_input.move_up = isDown ? 1 : 0;
+        game_input.direction_keys.move_up = isDown ? 1 : 0;
     } else if (c == NSDownArrowFunctionKey) {
-        game_input.move_down = isDown ? 1 : 0;
+        game_input.direction_keys.move_down = isDown ? 1 : 0;
+    } else {
+        return;
+    }
+}
+
+- (void)triggerMenuKey:(unichar)c {
+    if (c == NSF1FunctionKey) {
+        game_input.menu_help = 1;
+    } else if (c == NSF2FunctionKey) {
+        game_input.menu_sound_toggle = 1;
+    } else if (c == NSF3FunctionKey) {
+        game_input.menu_keyboard_config = 1;
+    } else if (c == NSF5FunctionKey) {
+        game_input.menu_reset_game = 1;
+    } else if (c == 27) {
+        game_input.menu_quit_game = 1;
+        g_running                 = 0;
+    } else if (c == NSTabCharacter) {
+        game_input.menu_status = 1;
     }
 }
 
@@ -99,11 +130,7 @@ static void macos_resize_backbuffer(macos_backbuffer_t *buffer, int width, int h
 
     unichar c = [chars characterAtIndex:0];
     [self updateMovementKey:c isDown:YES];
-    if (c == 27) {
-        game_input.toggle_pause = 1;
-    } else if (c == 13 || c == 3 || c == ' ') {
-        game_input.next_scene = 1;
-    }
+    [self triggerMenuKey:c];
 }
 
 - (BOOL)performKeyEquivalent:(NSEvent *)event {
@@ -121,6 +148,26 @@ static void macos_resize_backbuffer(macos_backbuffer_t *buffer, int width, int h
 
     unichar c = [chars characterAtIndex:0];
     [self updateMovementKey:c isDown:NO];
+}
+
+- (void)flagsChanged:(NSEvent *)event {
+    NSEventModifierFlags mods = [event modifierFlags] & NSEventModifierFlagDeviceIndependentFlagsMask;
+
+    switch ([event keyCode]) {
+    case kVK_Control:
+    case kVK_RightControl:
+        [self setButton:&game_input.action_1 isDown:((mods & NSEventModifierFlagControl) != 0)];
+        break;
+
+    case kVK_Option:
+    case kVK_RightOption:
+        [self setButton:&game_input.action_2 isDown:((mods & NSEventModifierFlagOption) != 0)];
+        break;
+
+    default:
+        [super flagsChanged:event];
+        break;
+    }
 }
 
 - (void)drawRect:(NSRect)dirtyRect {
@@ -267,8 +314,17 @@ int main(int argc, const char **argv) {
 
                 game_tick(&game_state, &game_input, dt, (uint32_t *)g_backbuffer.memory,
                           g_backbuffer.width, g_backbuffer.height);
-                game_input.toggle_pause = 0;
-                game_input.next_scene   = 0;
+                if (game_input.menu_reset_game) {
+                    game_init(&game_state);
+                }
+                game_input.action_1.pressed_this_frame = 0;
+                game_input.action_2.pressed_this_frame = 0;
+                game_input.menu_help                   = 0;
+                game_input.menu_sound_toggle           = 0;
+                game_input.menu_keyboard_config        = 0;
+                game_input.menu_reset_game             = 0;
+                game_input.menu_quit_game              = 0;
+                game_input.menu_status                 = 0;
 
                 [view setNeedsDisplay:YES];
                 [view displayIfNeeded];

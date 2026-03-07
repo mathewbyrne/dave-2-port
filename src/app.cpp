@@ -233,6 +233,37 @@ static int clampi(int v, int lo, int hi) {
     return v;
 }
 
+static game_direction_t input_direction_from_keys(const game_direction_state_t *keys) {
+    int dx = (int)keys->move_right - (int)keys->move_left;
+    int dy = (int)keys->move_down - (int)keys->move_up;
+
+    if (dx == 0 && dy == 0) {
+        return GAME_DIRECTION_NONE;
+    }
+    if (dx == 0 && dy < 0) {
+        return GAME_DIRECTION_N;
+    }
+    if (dx > 0 && dy < 0) {
+        return GAME_DIRECTION_NE;
+    }
+    if (dx > 0 && dy == 0) {
+        return GAME_DIRECTION_E;
+    }
+    if (dx > 0 && dy > 0) {
+        return GAME_DIRECTION_SE;
+    }
+    if (dx == 0 && dy > 0) {
+        return GAME_DIRECTION_S;
+    }
+    if (dx < 0 && dy > 0) {
+        return GAME_DIRECTION_SW;
+    }
+    if (dx < 0 && dy == 0) {
+        return GAME_DIRECTION_W;
+    }
+    return GAME_DIRECTION_NW;
+}
+
 static void update_level(game_state_t *state, const game_input_t *input) {
     int max_camera_x = state->level.w * TILE_WIDTH - EGA_SCREEN_WIDTH;
     int max_camera_y = state->level.h * TILE_HEIGHT - EGA_SCREEN_HEIGHT;
@@ -245,16 +276,20 @@ static void update_level(game_state_t *state, const game_input_t *input) {
 
     int cam_x = (int)state->level_camera_x;
     int cam_y = (int)state->level_camera_y;
-    if (input->move_left) {
+    if (input->direction == GAME_DIRECTION_W || input->direction == GAME_DIRECTION_NW ||
+        input->direction == GAME_DIRECTION_SW) {
         cam_x -= LEVEL_SCROLL_STEP;
     }
-    if (input->move_right) {
+    if (input->direction == GAME_DIRECTION_E || input->direction == GAME_DIRECTION_NE ||
+        input->direction == GAME_DIRECTION_SE) {
         cam_x += LEVEL_SCROLL_STEP;
     }
-    if (input->move_up) {
+    if (input->direction == GAME_DIRECTION_N || input->direction == GAME_DIRECTION_NE ||
+        input->direction == GAME_DIRECTION_NW) {
         cam_y -= LEVEL_SCROLL_STEP;
     }
-    if (input->move_down) {
+    if (input->direction == GAME_DIRECTION_S || input->direction == GAME_DIRECTION_SE ||
+        input->direction == GAME_DIRECTION_SW) {
         cam_y += LEVEL_SCROLL_STEP;
     }
 
@@ -312,33 +347,26 @@ void game_tick(game_state_t *state, const game_input_t *input, float dt_seconds,
     if (input) {
         tick_input = *input;
     }
+    tick_input.direction = input_direction_from_keys(&tick_input.direction_keys);
 
     state->tick_accumulator += dt_seconds;
     while (state->tick_accumulator >= (1.0f / (float)TICK_RATE)) {
         state->tick_accumulator -= (1.0f / (float)TICK_RATE);
 
-        if (state->scene == GAME_SCENE_TITLE && (tick_input.move_left || tick_input.move_right ||
-                                                 tick_input.move_up || tick_input.move_down)) {
-            tick_input.next_scene = 1;
+        if (state->scene == GAME_SCENE_TITLE &&
+            (tick_input.direction != GAME_DIRECTION_NONE || tick_input.action_1.pressed_this_frame ||
+             tick_input.action_2.pressed_this_frame)) {
+            set_scene(state, GAME_SCENE_LEVEL);
         }
 
-        if (tick_input.toggle_pause) {
+        if (tick_input.menu_status) {
             if (state->menu_state == GAME_MENU_HIDDEN) {
                 state->menu_state      = GAME_MENU_OPENING;
                 state->menu_anim_ticks = 0;
             } else {
                 state->menu_state = GAME_MENU_HIDDEN;
             }
-            tick_input.toggle_pause = 0;
-        }
-
-        if (tick_input.next_scene) {
-            if (state->scene == GAME_SCENE_TITLE) {
-                set_scene(state, GAME_SCENE_LEVEL);
-            } else {
-                set_scene(state, GAME_SCENE_TITLE);
-            }
-            tick_input.next_scene = 0;
+            tick_input.menu_status = 0;
         }
 
         state->tick += 1;

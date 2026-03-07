@@ -17,15 +17,53 @@ static game_state_t       game_state;
 static game_input_t       game_input;
 static HCURSOR            g_arrow_cursor;
 
+static void win32_set_button(game_button_t *button, uint8_t is_down) {
+    if (!button) {
+        return;
+    }
+
+    if (is_down && !button->is_down) {
+        button->pressed_this_frame = 1;
+    }
+    button->is_down = is_down;
+}
+
 static void win32_set_movement_key(WPARAM key, uint8_t is_down) {
     if (key == VK_LEFT) {
-        game_input.move_left = is_down;
+        game_input.direction_keys.move_left = is_down;
     } else if (key == VK_RIGHT) {
-        game_input.move_right = is_down;
+        game_input.direction_keys.move_right = is_down;
     } else if (key == VK_UP) {
-        game_input.move_up = is_down;
+        game_input.direction_keys.move_up = is_down;
     } else if (key == VK_DOWN) {
-        game_input.move_down = is_down;
+        game_input.direction_keys.move_down = is_down;
+    } else {
+        return;
+    }
+}
+
+static void win32_set_action_key(WPARAM key, uint8_t is_down) {
+    if (key == VK_CONTROL || key == VK_LCONTROL || key == VK_RCONTROL) {
+        win32_set_button(&game_input.action_1, is_down);
+    } else if (key == VK_MENU || key == VK_LMENU || key == VK_RMENU) {
+        win32_set_button(&game_input.action_2, is_down);
+    }
+}
+
+static void win32_set_menu_trigger(WPARAM key) {
+    if (key == VK_F1) {
+        game_input.menu_help = 1;
+    } else if (key == VK_F2) {
+        game_input.menu_sound_toggle = 1;
+    } else if (key == VK_F3) {
+        game_input.menu_keyboard_config = 1;
+    } else if (key == VK_F5) {
+        game_input.menu_reset_game = 1;
+    } else if (key == VK_ESCAPE) {
+        game_input.menu_quit_game = 1;
+        g_running                 = 0;
+    } else if (key == VK_TAB) {
+        game_input.menu_status = 1;
     }
 }
 
@@ -89,18 +127,16 @@ static LRESULT CALLBACK win32_main_window_proc(HWND window, UINT message, WPARAM
         }
 
         win32_set_movement_key(w_param, 1);
+        win32_set_action_key(w_param, 1);
         if ((l_param & (1 << 30)) == 0) {
-            if (w_param == VK_ESCAPE) {
-                game_input.toggle_pause = 1;
-            } else if (w_param == VK_RETURN || w_param == VK_SPACE) {
-                game_input.next_scene = 1;
-            }
+            win32_set_menu_trigger(w_param);
         }
         return 0;
     }
     case WM_SYSKEYUP:
     case WM_KEYUP:
         win32_set_movement_key(w_param, 0);
+        win32_set_action_key(w_param, 0);
         return 0;
 
     default:
@@ -165,8 +201,17 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line
 
         game_tick(&game_state, &game_input, dt, (uint32_t *)g_backbuffer.memory, g_backbuffer.width,
                   g_backbuffer.height);
-        game_input.toggle_pause = 0;
-        game_input.next_scene   = 0;
+        if (game_input.menu_reset_game) {
+            game_init(&game_state);
+        }
+        game_input.action_1.pressed_this_frame = 0;
+        game_input.action_2.pressed_this_frame = 0;
+        game_input.menu_help                   = 0;
+        game_input.menu_sound_toggle           = 0;
+        game_input.menu_keyboard_config        = 0;
+        game_input.menu_reset_game             = 0;
+        game_input.menu_quit_game              = 0;
+        game_input.menu_status                 = 0;
 
         RECT client_rect;
         GetClientRect(window, &client_rect);
