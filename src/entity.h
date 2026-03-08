@@ -26,16 +26,58 @@ typedef enum {
     ENTITY_TYPE_SCORE = 0x12,
 } entity_type_t;
 
-typedef struct entity_t {
-    entity_type_t type; // 0 means free slot / destroyed
-    int16_t       x;
-    int16_t       y;
-    uint8_t       dir;
-    uint16_t      sprite_id;
-    uint8_t       active;
+typedef struct game_state_t game_state_t;
+typedef struct entity_t     entity_t;
 
+typedef void (*entity_update_fn)(game_state_t *game, entity_t *e);
+typedef void (*entity_collide_entity_fn)(game_state_t *game, entity_t *e, entity_t *other);
+typedef void (*entity_collide_world_fn)(game_state_t *game, entity_t *e);
+
+struct entity_state_t {
+    uint16_t                 sprite_left_idx;
+    uint16_t                 sprite_right_idx;
+    uint16_t                 interactive;
+    uint16_t                 tick_period;
+    int16_t                  x_step;
+    int16_t                  y_step;
+    entity_update_fn         on_update;
+    entity_collide_entity_fn on_collide_entity;
+    entity_collide_world_fn  on_collide_world;
+    const entity_state_t    *next_state;
+};
+
+typedef struct entity_t {
+    entity_type_t   type; // 0 means free slot / destroyed
+    uint8_t         active;
+    const sprite_t *sprite;
+
+    int16_t x;
+    int16_t y;
+    int8_t  x_dir;
+    int8_t  y_dir;
     int16_t vx;
     int16_t vy;
+    int16_t ax;
+    int16_t ay;
+
+    int16_t tile_x0;
+    int16_t tile_y0;
+    int16_t tile_x1;
+    int16_t tile_y1;
+
+    int16_t bbox_x0;
+    int16_t bbox_y0;
+    int16_t bbox_x1;
+    int16_t bbox_y1;
+
+    bool blocked_n;
+    bool blocked_e;
+    bool blocked_s;
+    bool blocked_w;
+
+    uint16_t tick_accum;
+
+    const entity_state_t *state;
 } entity_t;
 
 typedef struct entity_arena_t {
@@ -88,5 +130,25 @@ static inline const entity_t *entity_begin_const(const entity_arena_t *arena) {
 static inline const entity_t *entity_end_const(const entity_arena_t *arena) {
     return arena->items + arena->cap;
 }
+
+void entity_set_state(game_state_t *state, entity_t *e, const entity_state_t *s);
+
+void player_idle_update(game_state_t *state, entity_t *e);                          // 3b98
+void player_idle_collide_entity(game_state_t *state, entity_t *e, entity_t *other); // 44ee
+void player_idle_collide_world(game_state_t *state, entity_t *e);                   // 463f
+
+// 08bc
+static const entity_state_t state_player_idle = {
+    .sprite_left_idx   = 9,
+    .sprite_right_idx  = 1,
+    .interactive       = 1,
+    .tick_period       = 6,
+    .x_step            = 0,
+    .y_step            = 0,
+    .on_update         = player_idle_update,
+    .on_collide_entity = player_idle_collide_entity,
+    .on_collide_world  = player_idle_collide_world,
+    .next_state        = &state_player_idle,
+};
 
 #endif

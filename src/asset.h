@@ -106,6 +106,18 @@ typedef struct {
     ega_buffer_t *mask;
     uint16_t      w;
     uint16_t      h;
+
+    // Bounding box geometry.  Current undestanding is that this is all uint16_t values, and that
+    // the sprite geometry has the entity position at 0, 0 for drawing. So our bbox values are
+    // offsets into the sprite essentially. The offset_x/y values are rarely used, seems only to be
+    // for effects.
+    uint16_t bbox_x0;
+    uint16_t bbox_y0;
+    uint16_t bbox_x1;
+    uint16_t bbox_y1;
+    uint16_t offset_x;
+    uint16_t offset_y;
+
 } sprite_t;
 
 typedef struct {

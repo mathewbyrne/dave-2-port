@@ -7,7 +7,6 @@
 #include "asset.cpp"
 #include "ega.cpp"
 #include "entity.cpp"
-#include "types.h"
 
 #define WORLD_TO_SCREEN(w, cam) (((w) - (cam)) / 16)
 
@@ -34,6 +33,12 @@ static const uint8_t g_fade_in_map16[4][16] = {
     {0, 0, 0, 0, 0, 0, 0, 0, 24, 25, 26, 27, 28, 29, 30, 31},
     {0, 1, 2, 3, 4, 5, 6, 7, 24, 25, 26, 27, 28, 29, 30, 31},
 };
+
+// In the original game, g_dt is derived from an IRQ-driven tick counter and is usually 1, with
+// occasional 0 values when a loop iteration occurs before the next simulation tick is due. For the
+// port we currently run a fixed 70 Hz update and treat each update as a single game tick for the
+// time being.
+#define g_dt 1
 
 enum {
     EXEC_SPR_NONE,
@@ -175,11 +180,10 @@ static void camera_reset(game_state_t *state) {
         camera_y = state->level_max_camera_y;
     }
 
-    state->level_camera_x = camera_x;
-    state->level_camera_y = camera_y;
-    // TODO: for when we need screen tile offsets cached
-    // g_screen_offset_tile_x = screen_offset_x >> 8 & 0xfe;
-    // g_screen_offset_tile_y = screen_offset_y >> 8 & 0xfe;
+    state->level_camera_x      = camera_x;
+    state->level_camera_y      = camera_y;
+    state->level_active_tile_x = camera_x >> 8 & 0xfe;
+    state->level_active_tile_y = camera_y >> 8 & 0xfe;
 }
 
 static void render_level(game_state_t *state) {
@@ -214,13 +218,14 @@ static void render_level(game_state_t *state) {
         }
     }
 
-    // for (int i = 0; i < state->entity_arena.count; i++) {
-    // }
-    ega_buffer_blit_masked(state->buffer, state->assets.sprites[1].image,
-                           state->assets.sprites[1].mask,
-                           WORLD_TO_SCREEN(state->player->x, state->level_camera_x),
-                           WORLD_TO_SCREEN(state->player->y, state->level_camera_y), 0, 0,
-                           state->assets.sprites[1].w, state->assets.sprites[1].h);
+    for (int i = 0; i < state->entity_arena.count; i++) {
+        entity_t *e = &state->entity_mem[i];
+        if (e->type != ENTITY_TYPE_FREE && e->active) {
+            ega_buffer_blit_sprite(state->buffer, e->sprite->image, e->sprite->mask,
+                                   WORLD_TO_SCREEN(e->x, state->level_camera_x),
+                                   WORLD_TO_SCREEN(e->y, state->level_camera_y));
+        }
+    }
 }
 
 static void render_menu_overlay(game_state_t *state) {
@@ -257,11 +262,11 @@ static void level_load(game_state_t *state) {
         for (int tile_x = 0; tile_x < state->level.w; tile_x++) {
             switch (state->level.tags[tile_x][tile_y]) {
             case LEVEL_TAG_PLAYER:
-                state->player->dir    = 1;
+                state->player->x_dir  = 1;
                 state->player->active = 1;
                 state->player->x      = tile_x << 8;
                 state->player->y      = tile_y * 0x100 + 0xf;
-                // entity_set_state(state->player, player_state_standing)
+                entity_set_state(state, state->player, &state_player_idle);
             }
         }
     }
@@ -329,30 +334,66 @@ static game_direction_t input_direction_from_keys(const game_direction_state_t *
     return GAME_DIRECTION_NW;
 }
 
-static void update_level(game_state_t *state, const game_input_t *input) {
-    int cam_x = (int)state->level_camera_x;
-    int cam_y = (int)state->level_camera_y;
-    if (input->direction == GAME_DIRECTION_W || input->direction == GAME_DIRECTION_NW ||
-        input->direction == GAME_DIRECTION_SW) {
-        cam_x -= LEVEL_SCROLL_STEP;
-    }
-    if (input->direction == GAME_DIRECTION_E || input->direction == GAME_DIRECTION_NE ||
-        input->direction == GAME_DIRECTION_SE) {
-        cam_x += LEVEL_SCROLL_STEP;
-    }
-    if (input->direction == GAME_DIRECTION_N || input->direction == GAME_DIRECTION_NE ||
-        input->direction == GAME_DIRECTION_NW) {
-        cam_y -= LEVEL_SCROLL_STEP;
-    }
-    if (input->direction == GAME_DIRECTION_S || input->direction == GAME_DIRECTION_SE ||
-        input->direction == GAME_DIRECTION_SW) {
-        cam_y += LEVEL_SCROLL_STEP;
-    }
+static void update_entity_bbox(entity_t *e) {
+    e->bbox_x0 = e->x + e->sprite->bbox_x0 + e->sprite->offset_x;
+    e->bbox_x1 = e->x + e->sprite->bbox_x1 + e->sprite->offset_x;
+    e->bbox_y0 = e->y + e->sprite->bbox_y0 + e->sprite->offset_y;
+    e->bbox_y1 = e->y + e->sprite->bbox_y1 + e->sprite->offset_y;
+    e->tile_x0 = e->bbox_x0 >> 8;
+    e->tile_x1 = e->bbox_x1 >> 8;
+    e->tile_y0 = e->bbox_y0 >> 8;
+    e->tile_y1 = e->bbox_y1 >> 8;
+}
 
-    state->level_camera_x =
-        (uint16_t)clampi(cam_x, state->level_min_camera_x, state->level_max_camera_x);
-    state->level_camera_y =
-        (uint16_t)clampi(cam_y, state->level_min_camera_y, state->level_max_camera_y);
+static void update_entity(game_state_t *state, entity_t *e) {
+    e->blocked_n = false;
+    e->blocked_e = false;
+    e->blocked_s = false;
+    e->blocked_w = false;
+
+    e->tick_accum = e->tick_accum + g_dt;
+
+    if (e->tick_accum < e->state->tick_period) {
+        if (!e->state->interactive) {
+            return;
+        }
+
+        update_entity_bbox(e);
+        // TODO: copy bbox to bbox2
+        // Unclear why yet but we store a cached version of the bounding box.
+        e->vx = 0;
+        e->vy = 0;
+
+        if (e->state->on_update) {
+            e->state->on_update(state);
+        }
+    }
+}
+
+static void update_level(game_state_t *state, const game_input_t *input) {
+    for (int i = 0; i < state->entity_arena.count; i++) {
+        entity_t *e = &state->entity_mem[i];
+        if (e->type == ENTITY_TYPE_FREE) {
+            continue;
+        }
+
+        // Activate entities when their tile AABB overlaps the current active tile region. The
+        // active region is anchored at level_active_tile_{x,y} and extends slightly beyond the
+        // visible screen to allow entities to wake up just before entering view. tile_x0/y0
+        // represent the entity's top-left tile, and tile_x1/y1 the bottom-right. This is a standard
+        // AABB overlap test between the entity bounds and the active tile window (with a small
+        // margin of ~2 tiles on the top/left).
+        if (e->active == 0 && state->level_active_tile_x - 2 < e->tile_x1 &&
+            state->level_active_tile_y - 2 < e->tile_y1 &&
+            e->tile_x0 < state->level_active_tile_x + 23 &&
+            e->tile_y0 < state->level_active_tile_y + 12) {
+            e->active = 1;
+        }
+
+        if (e->active) {
+            update_entity(state, e);
+        }
+    }
 }
 
 static void update_scene(game_state_t *state) {

@@ -64,7 +64,7 @@ typedef enum {
     GAME_MENU_OPEN,
 } game_menu_state_t;
 
-typedef struct {
+typedef struct game_state_t {
     // memory
     uint8_t  asset_mem[GAME_STATE_ASSET_CAP];
     uint8_t  scratch_mem[GAME_STATE_SCRATCH_CAP];
@@ -97,6 +97,9 @@ typedef struct {
     uint16_t level_min_camera_y;
     uint16_t level_max_camera_x;
     uint16_t level_max_camera_y;
+    // Units are active when they existing within this 2 tile boundary of the viewport. (maybe)
+    uint16_t level_active_tile_x;
+    uint16_t level_active_tile_y;
 
     uint32_t player_score;
     uint8_t  player_lives;

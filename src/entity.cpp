@@ -86,3 +86,26 @@ size_t entity_arena_data_bytes(const entity_arena_t *arena) {
 size_t entity_storage_bytes(uint16_t cap) {
     return sizeof(entity_t) * (size_t)cap;
 }
+
+void entity_set_state(game_state_t *state, entity_t *e, const entity_state_t *s) {
+    e->state = s;
+
+    if (e->x_dir < 1) {
+        e->sprite = &state->assets.sprites[s->sprite_left_idx];
+    } else {
+        e->sprite = &state->assets.sprites[s->sprite_right_idx];
+    }
+
+    if (s->tick_period < e->tick_accum) {
+        e->tick_accum = s->tick_period - 1;
+    }
+}
+
+void player_idle_update(game_state_t *state, entity_t *e) {
+}
+
+void player_idle_collide_entity(game_state_t *state, entity_t *e, entity_t *other) {
+}
+
+void player_idle_collide_world(game_state_t *state, entity_t *e) {
+}

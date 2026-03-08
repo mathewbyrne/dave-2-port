@@ -395,13 +395,13 @@ typedef struct {
     uint16_t height;
     uint16_t unknown_0x04;
     uint16_t unknown_0x06;
-    int16_t  bbox_dx0;
-    int16_t  bbox_dy0;
-    int16_t  bbox_dx1;
-    int16_t  bbox_dy1;
+    int16_t  bbox_x0;
+    int16_t  bbox_y0;
+    int16_t  bbox_x1;
+    int16_t  bbox_y1;
     char     name[13];
-    int16_t  spawn_dx;
-    int16_t  spawn_dy;
+    int16_t  offset_x;
+    int16_t  offset_y;
 } spr_def;
 
 int decode_sprites(asset_shared_t *shared, const asset_raw_t raw, ega_arena_t *a) {
@@ -426,14 +426,14 @@ int decode_sprites(asset_shared_t *shared, const asset_raw_t raw, ega_arena_t *a
             record->height       = read_le_u16(raw.exec.data + record_off + 0x02);
             record->unknown_0x04 = read_le_u16(raw.exec.data + record_off + 0x04);
             record->unknown_0x06 = read_le_u16(raw.exec.data + record_off + 0x06);
-            record->bbox_dx0     = read_le_i16(raw.exec.data + record_off + 0x08);
-            record->bbox_dy0     = read_le_i16(raw.exec.data + record_off + 0x0A);
-            record->bbox_dx1     = read_le_i16(raw.exec.data + record_off + 0x0C);
-            record->bbox_dy1     = read_le_i16(raw.exec.data + record_off + 0x0E);
+            record->bbox_x0      = read_le_i16(raw.exec.data + record_off + 0x08);
+            record->bbox_y0      = read_le_i16(raw.exec.data + record_off + 0x0A);
+            record->bbox_x1      = read_le_i16(raw.exec.data + record_off + 0x0C);
+            record->bbox_y1      = read_le_i16(raw.exec.data + record_off + 0x0E);
             memcpy(record->name, raw.exec.data + record_off + 0x10, 12);
             record->name[12] = 0;
-            record->spawn_dx = read_le_i16(raw.exec.data + record_off + 0x1C);
-            record->spawn_dy = read_le_i16(raw.exec.data + record_off + 0x1E);
+            record->offset_x = read_le_i16(raw.exec.data + record_off + 0x1C);
+            record->offset_y = read_le_i16(raw.exec.data + record_off + 0x1E);
 
             if (j == 0) {
                 memcpy(spr_defs[i].name, record->name, sizeof(spr_defs[i].name));
@@ -476,10 +476,16 @@ int decode_sprites(asset_shared_t *shared, const asset_raw_t raw, ega_arena_t *a
             assert(sprite_len <= chunk_size);
             assert((sprite_off + sprite_len) <= chunk_size);
 
-            dst->image = ega_buffer_alloc(a, w, h);
-            dst->mask  = ega_buffer_alloc(a, w, h);
-            dst->w     = w;
-            dst->h     = h;
+            dst->image    = ega_buffer_alloc(a, w, h);
+            dst->mask     = ega_buffer_alloc(a, w, h);
+            dst->w        = w;
+            dst->h        = h;
+            dst->bbox_x0  = def->bbox_x0;
+            dst->bbox_y0  = def->bbox_y0;
+            dst->bbox_x1  = def->bbox_x1;
+            dst->bbox_y1  = def->bbox_y1;
+            dst->offset_x = def->offset_x;
+            dst->offset_y = def->offset_y;
 
             ega_decode_4_plane(dst->image->data, plane_data + sprite_off, (uint16_t)sprite_len,
                                plane_offset);
